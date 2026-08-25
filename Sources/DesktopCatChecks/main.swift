@@ -217,6 +217,30 @@ private let checks = [
             throw CheckFailure(description: "expected a visible layer-zero screen-covering window to be fullscreen")
         }
     },
+    CheckCase(name: "fullscreenClassificationAllowsSmallFrameTolerance") {
+        let screen = CGRect(x: 0, y: 0, width: 1_440, height: 900)
+        let nearlyEqualWindow = CGRect(x: 0.5, y: -0.5, width: 1_440, height: 900)
+        let isFullscreen = WorkspaceObserver.isFullscreenAppActive(
+            windowData: [WorkspaceWindow(frame: nearlyEqualWindow, isOnScreen: true, layer: 0)],
+            screenFrames: [screen]
+        )
+
+        guard isFullscreen else {
+            throw CheckFailure(description: "expected a window within frame tolerance to be fullscreen")
+        }
+    },
+    CheckCase(name: "fullscreenClassificationRejectsSpanningWindow") {
+        let screen = CGRect(x: 0, y: 0, width: 1_440, height: 900)
+        let spanningWindow = CGRect(x: -100, y: -100, width: 3_200, height: 1_200)
+        let isFullscreen = WorkspaceObserver.isFullscreenAppActive(
+            windowData: [WorkspaceWindow(frame: spanningWindow, isOnScreen: true, layer: 0)],
+            screenFrames: [screen]
+        )
+
+        guard !isFullscreen else {
+            throw CheckFailure(description: "expected a spanning window not to be classified as fullscreen")
+        }
+    },
     CheckCase(name: "fullscreenClassificationIgnoresNonCoveringOrNonContentWindows") {
         let screen = CGRect(x: 0, y: 0, width: 1_440, height: 900)
         let isFullscreen = WorkspaceObserver.isFullscreenAppActive(

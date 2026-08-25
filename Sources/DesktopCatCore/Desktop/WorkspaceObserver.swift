@@ -33,6 +33,7 @@ public final class WorkspaceObserver {
     private let screenFrameProvider: () -> [CGRect]
     private let notificationCenter: NotificationCenter
     private var activationObserver: NSObjectProtocol?
+    private var activeSpaceObserver: NSObjectProtocol?
 
     public convenience init() {
         let workspace = NSWorkspace.shared
@@ -62,6 +63,15 @@ public final class WorkspaceObserver {
                 self?.refresh()
             }
         }
+        activeSpaceObserver = notificationCenter.addObserver(
+            forName: NSWorkspace.activeSpaceDidChangeNotification,
+            object: observedWorkspace,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.refresh()
+            }
+        }
         refresh()
     }
 
@@ -69,6 +79,9 @@ public final class WorkspaceObserver {
         MainActor.assumeIsolated {
             if let activationObserver {
                 notificationCenter.removeObserver(activationObserver)
+            }
+            if let activeSpaceObserver {
+                notificationCenter.removeObserver(activeSpaceObserver)
             }
         }
     }
@@ -90,12 +103,19 @@ public final class WorkspaceObserver {
 
         return windowData.contains { window in
             window.isOnScreen && window.layer == 0 && screenFrames.contains { screen in
-                window.frame.minX <= screen.minX
-                    && window.frame.minY <= screen.minY
-                    && window.frame.maxX >= screen.maxX
-                    && window.frame.maxY >= screen.maxY
+                framesMatchWithinTolerance(window.frame, screen)
             }
         }
+    }
+
+    /// Window-server frame values can differ from display frames by a fraction
+    /// of a point; larger differences are ordinary or spanning windows.
+    private static func framesMatchWithinTolerance(_ lhs: CGRect, _ rhs: CGRect) -> Bool {
+        let tolerance: CGFloat = 1
+        return abs(lhs.origin.x - rhs.origin.x) <= tolerance
+            && abs(lhs.origin.y - rhs.origin.y) <= tolerance
+            && abs(lhs.size.width - rhs.size.width) <= tolerance
+            && abs(lhs.size.height - rhs.size.height) <= tolerance
     }
 
     private static func frontmostWindowData(in workspace: NSWorkspace) -> [WorkspaceWindow]? {
@@ -108,11 +128,13 @@ public final class WorkspaceObserver {
         }
 
         let processIdentifier = frontmostProcess.processIdentifier
+        let currentProcessIdentifier = ProcessInfo.processInfo.processIdentifier
         var windows: [WorkspaceWindow] = []
 
         for info in windowInfo {
             guard let ownerPID = (info[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value,
-                  ownerPID == processIdentifier else {
+                  ownerPID == processIdentifier,
+                  ownerPID != currentProcessIdentifier else {
                 continue
             }
             guard let layer = (info[kCGWindowLayer as String] as? NSNumber)?.intValue,
