@@ -101,6 +101,85 @@ private let checks = [
         guard reaction == CatReaction(activity: .sitting, expression: .blink) else {
             throw CheckFailure(description: "click should trigger blinking sitting")
         }
+    },
+    CheckCase(name: "storeRoundTripsPreferences") {
+        let defaults = UserDefaults(suiteName: "DesktopCatChecks-\(UUID().uuidString)")!
+        let store = PetStateStore(defaults: defaults)
+        let expected = PetState(
+            personality: .curiousExplorer,
+            isMuted: true,
+            reducedMotion: true
+        )
+
+        store.save(expected)
+
+        guard store.load() == expected else {
+            throw CheckFailure(description: "saved state did not round-trip through UserDefaults")
+        }
+    },
+    CheckCase(name: "storeRoundTripsCompletePetState") {
+        let defaults = UserDefaults(suiteName: "DesktopCatChecks-\(UUID().uuidString)")!
+        let store = PetStateStore(defaults: defaults)
+        let expected = PetState(
+            personality: .dignifiedSenior,
+            mood: CatMood(hunger: 0.8, affection: 0.4, energy: 0.2, playfulness: 0.9),
+            isMuted: true,
+            isPaused: true,
+            clickThrough: true,
+            reducedMotion: true,
+            highContrast: true,
+            catScale: 1.35,
+            windowOrigin: ScreenRelativePoint(x: 0.82, y: 0.18),
+            windowLevel: .floating
+        )
+
+        store.save(expected)
+
+        guard store.load() == expected else {
+            throw CheckFailure(description: "care, accessibility, scale, or placement state did not round-trip")
+        }
+    },
+    CheckCase(name: "absentStoredDataReturnsSafeDefaults") {
+        let defaults = UserDefaults(suiteName: "DesktopCatChecks-\(UUID().uuidString)")!
+        let store = PetStateStore(defaults: defaults)
+
+        guard store.load() == PetState() else {
+            throw CheckFailure(description: "absent stored data did not return PetState defaults")
+        }
+    },
+    CheckCase(name: "corruptStoredDataReturnsSafeDefaults") {
+        let defaults = UserDefaults(suiteName: "DesktopCatChecks-\(UUID().uuidString)")!
+        defaults.set(Data([0x00, 0xFF, 0x7F]), forKey: "pet-state")
+        let store = PetStateStore(defaults: defaults)
+
+        guard store.load() == PetState() else {
+            throw CheckFailure(description: "corrupt stored data did not return PetState defaults")
+        }
+    },
+    CheckCase(name: "partialStoredDataUsesSafeDefaults") {
+        let defaults = UserDefaults(suiteName: "DesktopCatChecks-\(UUID().uuidString)")!
+        defaults.set(Data(#"{"personality":"sleepyLoaf"}"#.utf8), forKey: "pet-state")
+        let store = PetStateStore(defaults: defaults)
+        var expected = PetState()
+        expected.personality = .sleepyLoaf
+
+        guard store.load() == expected else {
+            throw CheckFailure(description: "missing fields in stored data did not use safe defaults")
+        }
+    },
+    CheckCase(name: "encodingFailurePreservesLastValidState") {
+        let defaults = UserDefaults(suiteName: "DesktopCatChecks-\(UUID().uuidString)")!
+        let store = PetStateStore(defaults: defaults)
+        let valid = PetState(personality: .sleepyLoaf, catScale: 0.9)
+        var invalid = valid
+        invalid.mood.energy = .nan
+
+        store.save(valid)
+        store.save(invalid)
+
+        guard store.load() == valid else {
+            throw CheckFailure(description: "an encoding failure overwrote the last valid state")
+        }
     }
 ]
 
