@@ -29,6 +29,33 @@ public enum CatGestureInterpreter {
     }
 }
 
+public struct CatAnimationTiming: Hashable, Sendable {
+    public let closingMilliseconds: Int
+    public let closedHoldMilliseconds: Int
+    public let openingMilliseconds: Int
+
+    public var totalMilliseconds: Int {
+        closingMilliseconds + closedHoldMilliseconds + openingMilliseconds
+    }
+
+    public init(expression: CatExpression) {
+        switch expression {
+        case .blink:
+            closingMilliseconds = 120
+            closedHoldMilliseconds = 70
+            openingMilliseconds = 160
+        case .slowBlink:
+            closingMilliseconds = 420
+            closedHoldMilliseconds = 260
+            openingMilliseconds = 480
+        default:
+            closingMilliseconds = 240
+            closedHoldMilliseconds = 60
+            openingMilliseconds = 320
+        }
+    }
+}
+
 public struct CatPose: Hashable, Sendable {
     public var bodyX = 0.0
     public var bodyY = 0.0
@@ -57,7 +84,7 @@ public struct CatPose: Hashable, Sendable {
         motionAllowed: Bool
     ) {
         apply(activity)
-        apply(expression)
+        apply(expression, phase: phase, motionAllowed: motionAllowed)
         if motionAllowed {
             applyMotion(activity, expression: expression, phase: phase)
         }
@@ -173,14 +200,18 @@ public struct CatPose: Hashable, Sendable {
         }
     }
 
-    private mutating func apply(_ expression: CatExpression) {
+    private mutating func apply(
+        _ expression: CatExpression,
+        phase: Bool,
+        motionAllowed: Bool
+    ) {
         switch expression {
         case .neutral:
             break
         case .blink:
-            eyeScaleY = 0.08
+            eyeScaleY = motionAllowed && !phase ? 1 : 0.08
         case .slowBlink:
-            eyeScaleY = 0.28
+            eyeScaleY = motionAllowed && !phase ? 1 : 0.28
             headRotation -= 2
         case .purr:
             eyeScaleY = min(eyeScaleY, 0.55)
@@ -332,6 +363,7 @@ public struct CatView: View {
         CatAnimationToken(
             activity: viewModel.activity,
             expression: viewModel.expression,
+            reactionNonce: viewModel.reactionNonce,
             motionAllowed: motionAllowed
         )
     }
@@ -363,17 +395,20 @@ public struct CatView: View {
     private func playBoundedAnimation() async {
         phase = false
         guard motionAllowed else { return }
+        let timing = CatAnimationTiming(expression: viewModel.expression)
 
-        withAnimation(.easeOut(duration: 0.24)) {
+        withAnimation(.easeOut(duration: Double(timing.closingMilliseconds) / 1_000)) {
             phase = true
         }
         do {
-            try await Task.sleep(for: .milliseconds(300))
+            try await Task.sleep(
+                for: .milliseconds(timing.closingMilliseconds + timing.closedHoldMilliseconds)
+            )
         } catch {
             return
         }
         guard !Task.isCancelled else { return }
-        withAnimation(.easeInOut(duration: 0.32)) {
+        withAnimation(.easeInOut(duration: Double(timing.openingMilliseconds) / 1_000)) {
             phase = false
         }
     }
@@ -382,6 +417,7 @@ public struct CatView: View {
 private struct CatAnimationToken: Hashable {
     let activity: CatActivity
     let expression: CatExpression
+    let reactionNonce: UInt64
     let motionAllowed: Bool
 }
 

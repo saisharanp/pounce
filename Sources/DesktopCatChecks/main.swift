@@ -35,7 +35,9 @@ private struct CatInspectionGrid: View {
                                 pose: CatPose(
                                     activity: sample.0,
                                     expression: sample.1,
-                                    phase: index.isMultiple(of: 2),
+                                    phase: sample.1 == .blink || sample.1 == .slowBlink
+                                        ? true
+                                        : index.isMultiple(of: 2),
                                     motionAllowed: true
                                 ),
                                 highContrast: index == 10
@@ -143,6 +145,48 @@ private let checks = [
 
         guard reaction == CatReaction(activity: .sitting, expression: .blink) else {
             throw CheckFailure(description: "click should trigger blinking sitting")
+        }
+    },
+    CheckCase(name: "secondClickReachesMeowThroughViewModel") {
+        let defaults = UserDefaults(suiteName: "DesktopCatChecks-\(UUID().uuidString)")!
+        let model = CatViewModel(store: PetStateStore(defaults: defaults))
+
+        model.handle(.click)
+        guard model.expression == .blink else {
+            throw CheckFailure(description: "the first contextual click did not blink")
+        }
+
+        model.handle(.click)
+        guard model.expression == .meow else {
+            throw CheckFailure(description: "the second contextual click did not reach meow")
+        }
+    },
+    CheckCase(name: "thirdClickReachesStartledThroughViewModel") {
+        let defaults = UserDefaults(suiteName: "DesktopCatChecks-\(UUID().uuidString)")!
+        let model = CatViewModel(store: PetStateStore(defaults: defaults))
+
+        model.handle(.click)
+        model.handle(.click)
+        model.handle(.click)
+
+        guard model.activity == .lookingAround, model.expression == .startled else {
+            throw CheckFailure(description: "the third contextual click did not reach a startled look-around")
+        }
+    },
+    CheckCase(name: "repeatedIdenticalInteractionsAdvanceReactionNonce") {
+        let defaults = UserDefaults(suiteName: "DesktopCatChecks-\(UUID().uuidString)")!
+        let model = CatViewModel(store: PetStateStore(defaults: defaults))
+        let initialNonce = model.reactionNonce
+
+        model.handle(.gentlePet)
+        let firstNonce = model.reactionNonce
+        model.handle(.gentlePet)
+        let secondNonce = model.reactionNonce
+
+        guard initialNonce < firstNonce, firstNonce < secondNonce else {
+            throw CheckFailure(
+                description: "identical direct reactions did not publish monotonically increasing animation nonces"
+            )
         }
     },
     CheckCase(name: "interactionPreemptsIdleActivity") {
@@ -263,6 +307,65 @@ private let checks = [
         }
         guard staticStart == staticEnd else {
             throw CheckFailure(description: "reduced-motion or paused rendering still changed by phase")
+        }
+    },
+    CheckCase(name: "normalBlinkClosesThenEndsOpen") {
+        let start = CatPose(
+            activity: .sitting,
+            expression: .blink,
+            phase: false,
+            motionAllowed: true
+        )
+        let closed = CatPose(
+            activity: .sitting,
+            expression: .blink,
+            phase: true,
+            motionAllowed: true
+        )
+        let end = CatPose(
+            activity: .sitting,
+            expression: .blink,
+            phase: false,
+            motionAllowed: true
+        )
+
+        guard start.eyeScaleY == 1, closed.eyeScaleY < 0.2, end.eyeScaleY == 1 else {
+            throw CheckFailure(description: "normal blink did not resolve open, closed, then open eye poses")
+        }
+    },
+    CheckCase(name: "normalSlowBlinkClosesThenEndsOpen") {
+        let start = CatPose(
+            activity: .kneading,
+            expression: .slowBlink,
+            phase: false,
+            motionAllowed: true
+        )
+        let closed = CatPose(
+            activity: .kneading,
+            expression: .slowBlink,
+            phase: true,
+            motionAllowed: true
+        )
+        let end = CatPose(
+            activity: .kneading,
+            expression: .slowBlink,
+            phase: false,
+            motionAllowed: true
+        )
+
+        guard start.eyeScaleY == 1, closed.eyeScaleY < 0.4, end.eyeScaleY == 1 else {
+            throw CheckFailure(description: "normal slow blink did not resolve open, closed, then open eye poses")
+        }
+    },
+    CheckCase(name: "slowBlinkUsesSlowerBoundedAnimationTiming") {
+        let blink = CatAnimationTiming(expression: .blink)
+        let slowBlink = CatAnimationTiming(expression: .slowBlink)
+
+        guard slowBlink.closingMilliseconds > blink.closingMilliseconds,
+              slowBlink.openingMilliseconds > blink.openingMilliseconds,
+              slowBlink.totalMilliseconds > blink.totalMilliseconds,
+              slowBlink.totalMilliseconds <= 2_000 else {
+            throw CheckFailure(description: "slow-blink timing was not slower than blink while remaining bounded")
         }
     },
     CheckCase(name: "animatedCatPosesStayInsideVisualBounds") {
