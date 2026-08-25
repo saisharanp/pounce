@@ -1,4 +1,5 @@
 import Darwin
+import CoreGraphics
 import DesktopCatCore
 import Foundation
 
@@ -179,6 +180,67 @@ private let checks = [
 
         guard store.load() == valid else {
             throw CheckFailure(description: "an encoding failure overwrote the last valid state")
+        }
+    },
+    CheckCase(name: "positionIsClampedInsideVisibleFrame") {
+        let frame = CGRect(x: 0, y: 0, width: 1_000, height: 700)
+        let result = DesktopCatWindowController.clampedOrigin(
+            CGPoint(x: 1_200, y: -50),
+            windowSize: CGSize(width: 180, height: 180),
+            visibleFrame: frame
+        )
+
+        guard result == CGPoint(x: 820, y: 0) else {
+            throw CheckFailure(description: "expected out-of-bounds position to clamp to (820, 0), got \(result)")
+        }
+    },
+    CheckCase(name: "oversizedWindowIsAnchoredToVisibleFrameOrigin") {
+        let frame = CGRect(x: 40, y: 30, width: 100, height: 80)
+        let result = DesktopCatWindowController.clampedOrigin(
+            CGPoint(x: 70, y: 50),
+            windowSize: CGSize(width: 180, height: 180),
+            visibleFrame: frame
+        )
+
+        guard result == CGPoint(x: 40, y: 30) else {
+            throw CheckFailure(description: "expected oversized window to anchor at visible-frame origin, got \(result)")
+        }
+    },
+    CheckCase(name: "fullscreenClassificationRecognizesScreenCoveringWindow") {
+        let screen = CGRect(x: 0, y: 0, width: 1_440, height: 900)
+        let isFullscreen = WorkspaceObserver.isFullscreenAppActive(
+            windowData: [WorkspaceWindow(frame: screen, isOnScreen: true, layer: 0)],
+            screenFrames: [screen]
+        )
+
+        guard isFullscreen else {
+            throw CheckFailure(description: "expected a visible layer-zero screen-covering window to be fullscreen")
+        }
+    },
+    CheckCase(name: "fullscreenClassificationIgnoresNonCoveringOrNonContentWindows") {
+        let screen = CGRect(x: 0, y: 0, width: 1_440, height: 900)
+        let isFullscreen = WorkspaceObserver.isFullscreenAppActive(
+            windowData: [
+                WorkspaceWindow(frame: CGRect(x: 0, y: 0, width: 1_000, height: 700), isOnScreen: true, layer: 0),
+                WorkspaceWindow(frame: screen, isOnScreen: false, layer: 0),
+                WorkspaceWindow(frame: screen, isOnScreen: true, layer: 3)
+            ],
+            screenFrames: [screen]
+        )
+
+        guard !isFullscreen else {
+            throw CheckFailure(description: "expected non-covering and non-content windows not to be fullscreen")
+        }
+    },
+    CheckCase(name: "fullscreenClassificationHidesWhenDataIsUnavailable") {
+        let screen = CGRect(x: 0, y: 0, width: 1_440, height: 900)
+        let isFullscreen = WorkspaceObserver.isFullscreenAppActive(
+            windowData: nil,
+            screenFrames: [screen]
+        )
+
+        guard isFullscreen else {
+            throw CheckFailure(description: "expected unavailable fullscreen data to hide the cat")
         }
     }
 ]
