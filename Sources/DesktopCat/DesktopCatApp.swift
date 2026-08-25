@@ -1,3 +1,4 @@
+import DesktopCatCore
 import SwiftUI
 
 @main

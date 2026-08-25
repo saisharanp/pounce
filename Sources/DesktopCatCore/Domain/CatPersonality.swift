@@ -1,7 +1,7 @@
-enum CatPersonality: String, CaseIterable, Codable {
+public enum CatPersonality: String, CaseIterable, Codable {
     case playfulKitten, sleepyLoaf, curiousExplorer, dignifiedSenior
 
-    func weight(for activity: CatActivity) -> Int {
+    public func weight(for activity: CatActivity) -> Int {
         switch (self, activity) {
         case (.playfulKitten, .pouncing), (.playfulKitten, .zooming): return 8
         case (.playfulKitten, .sleeping): return 2

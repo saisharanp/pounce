@@ -5,11 +5,14 @@ let package = Package(
     name: "DesktopCat",
     platforms: [.macOS(.v14)],
     products: [
-        .executable(name: "DesktopCat", targets: ["DesktopCat"])
+        .library(name: "DesktopCatCore", targets: ["DesktopCatCore"]),
+        .executable(name: "DesktopCat", targets: ["DesktopCat"]),
+        .executable(name: "DesktopCatChecks", targets: ["DesktopCatChecks"])
     ],
     targets: [
-        .executableTarget(name: "DesktopCat"),
-        .testTarget(name: "DesktopCatTests", dependencies: ["DesktopCat"])
+        .target(name: "DesktopCatCore"),
+        .executableTarget(name: "DesktopCat", dependencies: ["DesktopCatCore"]),
+        .executableTarget(name: "DesktopCatChecks", dependencies: ["DesktopCatCore"])
     ],
     swiftLanguageModes: [.v6]
 )
