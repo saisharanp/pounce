@@ -1,5 +1,6 @@
 import Darwin
 import DesktopCatCore
+import Foundation
 
 private struct CheckCase {
     let name: String
@@ -19,6 +20,31 @@ private let checks = [
             throw CheckFailure(
                 description: "expected pouncing weight (\(playWeight)) to exceed sleeping weight (\(sleepWeight))"
             )
+        }
+    },
+    CheckCase(name: "schedulerDoesNotRepeatRecentActivity") {
+        let scheduler = CatScheduler(randomIndex: { _ in 0 })
+        let next = scheduler.nextIdleActivity(
+            now: Date(timeIntervalSince1970: 12 * 60 * 60),
+            personality: .playfulKitten,
+            mood: CatMood(),
+            recentActivities: [.pouncing]
+        )
+
+        guard next != .pouncing else {
+            throw CheckFailure(description: "scheduler repeated recent activity: pouncing")
+        }
+    },
+    CheckCase(name: "lateNightBiasAllowsSleeping") {
+        let scheduler = CatScheduler(randomIndex: { _ in 0 })
+        let isAllowed = scheduler.isAllowed(
+            .sleeping,
+            now: Date(timeIntervalSince1970: 2 * 60 * 60),
+            recentActivities: []
+        )
+
+        guard isAllowed else {
+            throw CheckFailure(description: "sleeping should be allowed late at night")
         }
     }
 ]
