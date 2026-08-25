@@ -46,6 +46,61 @@ private let checks = [
         guard isAllowed else {
             throw CheckFailure(description: "sleeping should be allowed late at night")
         }
+    },
+    CheckCase(name: "gentlePettingReturnsAffectionateReaction") {
+        let reaction = CatReactionResolver.resolve(.gentlePet, mood: CatMood())
+
+        guard reaction.activity == .kneading else {
+            throw CheckFailure(description: "gentle petting should trigger kneading")
+        }
+        guard reaction.expression == .slowBlink else {
+            throw CheckFailure(description: "gentle petting should trigger a slow blink")
+        }
+    },
+    CheckCase(name: "fastRepeatedInputReturnsMildAnnoyance") {
+        let reaction = CatReactionResolver.resolve(.hurriedAttention, mood: CatMood())
+
+        guard reaction.expression == .sideEye else {
+            throw CheckFailure(description: "hurried attention should trigger a side-eye")
+        }
+    },
+    CheckCase(name: "laserProducesPouncingReaction") {
+        let reaction = CatReactionResolver.resolve(.laser, mood: CatMood())
+
+        guard reaction == CatReaction(activity: .pouncing, expression: .neutral) else {
+            throw CheckFailure(description: "laser should trigger neutral pouncing")
+        }
+    },
+    CheckCase(name: "yarnAndPaperBallProduceChirpingPounces") {
+        let mood = CatMood()
+        let yarnReaction = CatReactionResolver.resolve(.yarn, mood: mood)
+        let paperBallReaction = CatReactionResolver.resolve(.paperBall, mood: mood)
+        let expected = CatReaction(activity: .pouncing, expression: .chirp)
+
+        guard yarnReaction == expected, paperBallReaction == expected else {
+            throw CheckFailure(description: "yarn and paper ball should trigger chirping pounces")
+        }
+    },
+    CheckCase(name: "featherProducesLookingAroundReaction") {
+        let reaction = CatReactionResolver.resolve(.feather, mood: CatMood())
+
+        guard reaction == CatReaction(activity: .lookingAround, expression: .chirp) else {
+            throw CheckFailure(description: "feather should trigger a chirping look-around")
+        }
+    },
+    CheckCase(name: "treatProducesEatingReaction") {
+        let reaction = CatReactionResolver.resolve(.treat, mood: CatMood())
+
+        guard reaction == CatReaction(activity: .eating, expression: .purr) else {
+            throw CheckFailure(description: "treat should trigger purring eating")
+        }
+    },
+    CheckCase(name: "clickProducesBlinkingSittingReaction") {
+        let reaction = CatReactionResolver.resolve(.click, mood: CatMood())
+
+        guard reaction == CatReaction(activity: .sitting, expression: .blink) else {
+            throw CheckFailure(description: "click should trigger blinking sitting")
+        }
     }
 ]
 
