@@ -11,7 +11,8 @@ public final class DesktopCatWindowController: NSWindowController {
     public init(
         state: PetState,
         windowSize: CGSize = CGSize(width: 180, height: 180),
-        workspaceObserver: WorkspaceObserver = WorkspaceObserver()
+        workspaceObserver: WorkspaceObserver = WorkspaceObserver(),
+        viewModel: CatViewModel? = nil
     ) {
         let panel = NSPanel(
             contentRect: CGRect(origin: .zero, size: windowSize),
@@ -24,7 +25,14 @@ public final class DesktopCatWindowController: NSWindowController {
         panel.hasShadow = false
         panel.isMovableByWindowBackground = true
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        panel.contentView = NSHostingView(rootView: EmptyView())
+        let resolvedViewModel = viewModel ?? CatViewModel(
+            store: PetStateStore(),
+            initialState: state
+        )
+        panel.contentView = CatHostingView(
+            rootView: CatView(viewModel: resolvedViewModel),
+            viewModel: resolvedViewModel
+        )
 
         self.workspaceObserver = workspaceObserver
         super.init(window: panel)
@@ -119,5 +127,39 @@ public final class DesktopCatWindowController: NSWindowController {
         let screen = NSScreen.screens.first { $0.frame.intersects(window.frame) } ?? NSScreen.main
         guard let screen else { return }
         moveToVisibleFrame(screen.visibleFrame)
+    }
+}
+
+@MainActor
+private final class CatHostingView: NSHostingView<CatView> {
+    private let viewModel: CatViewModel
+
+    init(rootView: CatView, viewModel: CatViewModel) {
+        self.viewModel = viewModel
+        super.init(rootView: rootView)
+    }
+
+    @available(*, unavailable)
+    required init(rootView: CatView) {
+        fatalError("Use init(rootView:viewModel:)")
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("CatHostingView does not support coder initialization")
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        let scale = min(max(viewModel.state.catScale, 0.65), 1.3)
+        let illustratedSide = 132 * scale
+        let illustratedBounds = CGRect(
+            x: bounds.midX - illustratedSide / 2,
+            y: bounds.midY - illustratedSide / 2,
+            width: illustratedSide,
+            height: illustratedSide
+        )
+        guard CatHitArea.contains(point, in: illustratedBounds) else {
+            return nil
+        }
+        return super.hitTest(point)
     }
 }

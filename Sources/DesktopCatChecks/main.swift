@@ -1,7 +1,9 @@
+import AppKit
 import Darwin
 import CoreGraphics
 import DesktopCatCore
 import Foundation
+import SwiftUI
 
 private struct CheckCase {
     let name: String
@@ -10,6 +12,46 @@ private struct CheckCase {
 
 private struct CheckFailure: Error, CustomStringConvertible {
     let description: String
+}
+
+private struct CatInspectionGrid: View {
+    private let samples: [(CatActivity, CatExpression)] = [
+        (.sitting, .blink), (.loafing, .purr), (.walking, .sideEye),
+        (.sleeping, .slowBlink), (.waking, .startled), (.stretching, .neutral),
+        (.grooming, .neutral), (.kneading, .slowBlink), (.lookingAround, .chirp),
+        (.pouncing, .chirp), (.zooming, .startled), (.hiding, .neutral),
+        (.peeking, .sideEye), (.eating, .purr), (.sunbathing, .meow)
+    ]
+
+    var body: some View {
+        Grid(horizontalSpacing: 8, verticalSpacing: 8) {
+            ForEach(0..<5, id: \.self) { row in
+                GridRow {
+                    ForEach(0..<3, id: \.self) { column in
+                        let index = row * 3 + column
+                        let sample = samples[index]
+                        VStack(spacing: 2) {
+                            OrangeTabbyShape(
+                                pose: CatPose(
+                                    activity: sample.0,
+                                    expression: sample.1,
+                                    phase: index.isMultiple(of: 2),
+                                    motionAllowed: true
+                                ),
+                                highContrast: index == 10
+                            )
+                            .frame(width: 120, height: 120)
+                            Text("\(sample.0.rawValue) · \(sample.1.rawValue)")
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundStyle(.black)
+                        }
+                    }
+                }
+            }
+        }
+        .padding(12)
+        .background(Color.white)
+    }
 }
 
 private let checks = [
@@ -101,6 +143,243 @@ private let checks = [
 
         guard reaction == CatReaction(activity: .sitting, expression: .blink) else {
             throw CheckFailure(description: "click should trigger blinking sitting")
+        }
+    },
+    CheckCase(name: "interactionPreemptsIdleActivity") {
+        let defaults = UserDefaults(suiteName: "DesktopCatChecks-\(UUID().uuidString)")!
+        let model = CatViewModel(
+            store: PetStateStore(defaults: defaults),
+            scheduler: CatScheduler(randomIndex: { _ in 0 })
+        )
+
+        model.scheduleIdleActivity(now: Date(timeIntervalSince1970: 12 * 60 * 60))
+        model.handle(.gentlePet)
+
+        guard model.activity == .kneading else {
+            throw CheckFailure(description: "gentle petting did not preempt the idle activity with kneading")
+        }
+        guard model.expression == .slowBlink else {
+            throw CheckFailure(description: "gentle petting did not synchronously select a slow blink")
+        }
+    },
+    CheckCase(name: "viewModelRetainsTwoRecentIdleActivities") {
+        let defaults = UserDefaults(suiteName: "DesktopCatChecks-\(UUID().uuidString)")!
+        let model = CatViewModel(
+            store: PetStateStore(defaults: defaults),
+            scheduler: CatScheduler(randomIndex: { _ in 0 })
+        )
+        let noon = Date(timeIntervalSince1970: 12 * 60 * 60)
+
+        model.scheduleIdleActivity(now: noon)
+        model.scheduleIdleActivity(now: noon)
+        model.scheduleIdleActivity(now: noon)
+
+        guard model.recentIdleActivities == [.loafing, .walking] else {
+            throw CheckFailure(
+                description: "expected only the latest two idle activities, got \(model.recentIdleActivities)"
+            )
+        }
+    },
+    CheckCase(name: "viewModelPersistsStateChanges") {
+        let defaults = UserDefaults(suiteName: "DesktopCatChecks-\(UUID().uuidString)")!
+        let store = PetStateStore(defaults: defaults)
+        let model = CatViewModel(store: store)
+
+        model.updateState {
+            $0.reducedMotion = true
+            $0.highContrast = true
+            $0.catScale = 1.3
+        }
+
+        let restored = store.load()
+        guard restored == model.state else {
+            throw CheckFailure(description: "the model's state change was not persisted")
+        }
+        guard restored.reducedMotion, restored.highContrast, restored.catScale == 1.3 else {
+            throw CheckFailure(description: "the persisted accessibility and scale values were incomplete")
+        }
+    },
+    CheckCase(name: "viewModelUsesInjectedInitialRenderingState") {
+        let defaults = UserDefaults(suiteName: "DesktopCatChecks-\(UUID().uuidString)")!
+        let expected = PetState(reducedMotion: true, highContrast: true, catScale: 1.25)
+        let model = CatViewModel(
+            store: PetStateStore(defaults: defaults),
+            initialState: expected
+        )
+
+        guard model.state == expected else {
+            throw CheckFailure(description: "the panel's initial accessibility and scale state was not adopted")
+        }
+    },
+    CheckCase(name: "primaryActivitiesUseDistinctCatPoses") {
+        let poses = CatActivity.allCases.map {
+            CatPose(activity: $0, expression: .neutral, phase: false, motionAllowed: false)
+        }
+
+        guard Set(poses).count == CatActivity.allCases.count else {
+            throw CheckFailure(description: "one or more primary activities collapsed to the same generic pose")
+        }
+    },
+    CheckCase(name: "expressionsUseDistinctFacePoses") {
+        let expressions: [CatExpression] = [
+            .neutral, .blink, .slowBlink, .purr, .chirp, .meow, .sideEye, .startled
+        ]
+        let poses = expressions.map {
+            CatPose(activity: .sitting, expression: $0, phase: false, motionAllowed: false)
+        }
+
+        guard Set(poses).count == expressions.count else {
+            throw CheckFailure(description: "one or more expressions collapsed to the same face pose")
+        }
+    },
+    CheckCase(name: "disabledMotionUsesStablePose") {
+        let activeStart = CatPose(
+            activity: .walking,
+            expression: .neutral,
+            phase: false,
+            motionAllowed: true
+        )
+        let activeEnd = CatPose(
+            activity: .walking,
+            expression: .neutral,
+            phase: true,
+            motionAllowed: true
+        )
+        let staticStart = CatPose(
+            activity: .walking,
+            expression: .neutral,
+            phase: false,
+            motionAllowed: false
+        )
+        let staticEnd = CatPose(
+            activity: .walking,
+            expression: .neutral,
+            phase: true,
+            motionAllowed: false
+        )
+
+        guard activeStart != activeEnd else {
+            throw CheckFailure(description: "normal motion did not produce a bounded phase change")
+        }
+        guard staticStart == staticEnd else {
+            throw CheckFailure(description: "reduced-motion or paused rendering still changed by phase")
+        }
+    },
+    CheckCase(name: "animatedCatPosesStayInsideVisualBounds") {
+        let expressions: [CatExpression] = [
+            .neutral, .blink, .slowBlink, .purr, .chirp, .meow, .sideEye, .startled
+        ]
+
+        for activity in CatActivity.allCases {
+            for expression in expressions {
+                for phase in [false, true] {
+                    let pose = CatPose(
+                        activity: activity,
+                        expression: expression,
+                        phase: phase,
+                        motionAllowed: true
+                    )
+                    guard abs(pose.bodyX) <= 12,
+                          pose.bodyY >= -4, pose.bodyY <= 15,
+                          pose.bodyScaleX >= 0.75, pose.bodyScaleX <= 1.2,
+                          pose.bodyScaleY >= 0.75, pose.bodyScaleY <= 1.1,
+                          abs(pose.bodyRotation) <= 12,
+                          abs(pose.headRotation) <= 45,
+                          abs(pose.tailRotation) <= 35,
+                          pose.opacity >= 0.3, pose.opacity <= 1 else {
+                        throw CheckFailure(
+                            description: "\(activity.rawValue)/\(expression.rawValue) exceeded the cat's visual bounds"
+                        )
+                    }
+                }
+            }
+        }
+    },
+    CheckCase(name: "tapOnCatMapsToClick") {
+        let interaction = CatGestureInterpreter.interaction(
+            translation: CGSize(width: 1, height: 1),
+            duration: 0.15,
+            recentContactCount: 1
+        )
+
+        guard case .click = interaction else {
+            throw CheckFailure(description: "a stationary contact did not map to a click")
+        }
+    },
+    CheckCase(name: "slowDragOnCatMapsToGentlePet") {
+        let interaction = CatGestureInterpreter.interaction(
+            translation: CGSize(width: 40, height: 5),
+            duration: 1.2,
+            recentContactCount: 1
+        )
+
+        guard case .gentlePet = interaction else {
+            throw CheckFailure(description: "a deliberate slow drag did not map to gentle petting")
+        }
+    },
+    CheckCase(name: "fastDragOnCatMapsToHurriedAttention") {
+        let interaction = CatGestureInterpreter.interaction(
+            translation: CGSize(width: 80, height: 0),
+            duration: 0.1,
+            recentContactCount: 1
+        )
+
+        guard case .hurriedAttention = interaction else {
+            throw CheckFailure(description: "a fast drag did not map to mild hurried-attention feedback")
+        }
+    },
+    CheckCase(name: "repeatedCatContactMapsToHurriedAttention") {
+        let interaction = CatGestureInterpreter.interaction(
+            translation: .zero,
+            duration: 0.2,
+            recentContactCount: 3
+        )
+
+        guard case .hurriedAttention = interaction else {
+            throw CheckFailure(description: "repeated contact did not map to mild hurried-attention feedback")
+        }
+    },
+    CheckCase(name: "orangeTabbyRendersVisibleNativeLayers") {
+        let pose = CatPose(
+            activity: .sitting,
+            expression: .slowBlink,
+            phase: false,
+            motionAllowed: false
+        )
+        let renderer = ImageRenderer(
+            content: OrangeTabbyShape(pose: pose, highContrast: false)
+                .frame(width: 160, height: 160)
+        )
+        renderer.scale = 2
+
+        guard let image = renderer.nsImage,
+              let representation = image.tiffRepresentation,
+              representation.count > 1_000 else {
+            throw CheckFailure(description: "the layered orange tabby did not produce a visible rendered image")
+        }
+
+        if let snapshotPath = ProcessInfo.processInfo.environment["DESKTOP_CAT_SNAPSHOT_PATH"] {
+            let inspectionRenderer = ImageRenderer(content: CatInspectionGrid())
+            inspectionRenderer.scale = 2
+            guard let inspectionImage = inspectionRenderer.nsImage,
+                  let tiff = inspectionImage.tiffRepresentation,
+                  let bitmap = NSBitmapImageRep(data: tiff),
+                  let png = bitmap.representation(using: .png, properties: [:]) else {
+                throw CheckFailure(description: "the pose inspection grid could not be encoded")
+            }
+            try png.write(to: URL(fileURLWithPath: snapshotPath), options: .atomic)
+            print("SNAPSHOT \(snapshotPath)")
+        }
+    },
+    CheckCase(name: "catHitAreaLeavesTransparentPanelCornersDraggable") {
+        let bounds = CGRect(x: 0, y: 0, width: 160, height: 160)
+
+        guard CatHitArea.contains(CGPoint(x: 80, y: 88), in: bounds) else {
+            throw CheckFailure(description: "the illustrated cat center was not interactive")
+        }
+        guard !CatHitArea.contains(CGPoint(x: 5, y: 5), in: bounds),
+              !CatHitArea.contains(CGPoint(x: 155, y: 155), in: bounds) else {
+            throw CheckFailure(description: "transparent panel corners intercepted cat gestures")
         }
     },
     CheckCase(name: "storeRoundTripsPreferences") {
