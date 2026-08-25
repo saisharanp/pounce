@@ -1,11 +1,10 @@
-import XCTest
+import Testing
 @testable import DesktopCat
 
-final class CatActivityTests: XCTestCase {
-    func testPlayfulPersonalityPrefersPlayOverSleep() {
-        XCTAssertGreaterThan(
-            CatPersonality.playfulKitten.weight(for: .pouncing),
-            CatPersonality.playfulKitten.weight(for: .sleeping)
-        )
-    }
+@Test
+func playfulPersonalityPrefersPlayOverSleep() {
+    #expect(
+        CatPersonality.playfulKitten.weight(for: .pouncing)
+            > CatPersonality.playfulKitten.weight(for: .sleeping)
+    )
 }
