@@ -68,7 +68,22 @@ public final class CatViewModel: ObservableObject {
         store.save(changedState)
     }
 
+    public func setPaused(_ paused: Bool) {
+        updateState { $0.isPaused = paused }
+        if paused {
+            activity = .sitting
+            expression = .neutral
+        }
+    }
+
+    public func applyElapsedCare(seconds: TimeInterval) {
+        updateState { state in
+            state.mood = state.mood.applyingElapsedCare(seconds: seconds)
+        }
+    }
+
     public func scheduleIdleActivity(now: Date) {
+        guard !state.isPaused else { return }
         activity = scheduler.nextIdleActivity(
             now: now,
             personality: state.personality,

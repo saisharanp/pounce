@@ -5,40 +5,22 @@ import SwiftUI
 @main
 @MainActor
 struct DesktopCatApp: App {
-    @StateObject private var menuController: MenuBarController
-    private let windowController: DesktopCatWindowController
+    @StateObject private var coordinator: AppCoordinator
 
     init() {
-        let store = PetStateStore()
-        let viewModel = CatViewModel(store: store)
-        let menuController = MenuBarController(
-            viewModel: viewModel,
-            onOpenSettings: {
-                NSApplication.shared.sendAction(
-                    Selector(("showSettingsWindow:")),
-                    to: nil,
-                    from: nil
-                )
-            }
-        )
-        let windowController = DesktopCatWindowController(
-            state: viewModel.state,
-            viewModel: viewModel,
-            menuController: menuController
-        )
-
-        _menuController = StateObject(wrappedValue: menuController)
-        self.windowController = windowController
+        _coordinator = StateObject(wrappedValue: AppCoordinator())
     }
 
     var body: some Scene {
         MenuBarExtra("Desktop Cat", systemImage: "cat.fill") {
-            MenuBarContent(controller: menuController)
+            MenuBarContent(controller: coordinator.menuController)
+                .onAppear { coordinator.start() }
         }
         .menuBarExtraStyle(.window)
 
         Settings {
-            SettingsView(controller: menuController)
+            SettingsView(controller: coordinator.menuController)
+                .onAppear { coordinator.start() }
         }
     }
 }

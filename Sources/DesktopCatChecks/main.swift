@@ -231,6 +231,62 @@ private let checks = [
             throw CheckFailure(description: "gentle petting did not synchronously select a slow blink")
         }
     },
+    CheckCase(name: "pausedModelDoesNotScheduleNewIdleActivity") {
+        let defaults = UserDefaults(suiteName: "DesktopCatChecks-\(UUID().uuidString)")!
+        let model = CatViewModel(
+            store: PetStateStore(defaults: defaults),
+            scheduler: CatScheduler(randomIndex: { _ in 0 })
+        )
+
+        model.setPaused(true)
+        model.scheduleIdleActivity(now: Date(timeIntervalSince1970: 12 * 60 * 60))
+
+        guard model.activity == .sitting, model.state.isPaused else {
+            throw CheckFailure(description: "a paused model scheduled a new idle activity")
+        }
+    },
+    CheckCase(name: "lifecycleEligibilitySuspendsIdleWorkWhenNotDisplayable") {
+        guard AppCoordinator.shouldScheduleIdle(
+            isVisible: true,
+            isPaused: false,
+            isFullscreenActive: false
+        ) else {
+            throw CheckFailure(description: "a visible, unpaused cat outside fullscreen was not eligible for idle work")
+        }
+
+        let suspendedStates = [
+            (false, false, false),
+            (true, true, false),
+            (true, false, true)
+        ]
+        for (isVisible, isPaused, isFullscreenActive) in suspendedStates {
+            guard !AppCoordinator.shouldScheduleIdle(
+                isVisible: isVisible,
+                isPaused: isPaused,
+                isFullscreenActive: isFullscreenActive
+            ) else {
+                throw CheckFailure(description: "hidden, paused, or fullscreen state left idle work eligible")
+            }
+        }
+    },
+    CheckCase(name: "attentionLevelsUseApprovedIdleIntervals") {
+        guard AppCoordinator.idleInterval(for: .calm) == 20...35,
+              AppCoordinator.idleInterval(for: .balanced) == 10...20,
+              AppCoordinator.idleInterval(for: .lively) == 5...12 else {
+            throw CheckFailure(description: "attention levels did not use the approved idle intervals")
+        }
+    },
+    CheckCase(name: "elapsedCareUpdateIsGentleAndNeverPunishes") {
+        let updated = CatMood().applyingElapsedCare(seconds: 24 * 60 * 60)
+
+        guard updated.hunger > 0.25,
+              updated.hunger < 0.5,
+              updated.affection >= 0.65,
+              updated.energy >= 0.65,
+              updated.playfulness >= 0.65 else {
+            throw CheckFailure(description: "elapsed care update was not gentle and non-punitive")
+        }
+    },
     CheckCase(name: "selectedToyIsTransientAndCompletesEveryInteraction") {
         let defaults = UserDefaults(suiteName: "DesktopCatChecks-\(UUID().uuidString)")!
         let store = PetStateStore(defaults: defaults)

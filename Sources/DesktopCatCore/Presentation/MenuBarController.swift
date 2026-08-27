@@ -38,6 +38,7 @@ public final class MenuBarController: ObservableObject {
     private var onSetClickThrough: (Bool) -> Void
     private var onSetWindowLevel: (PetWindowLevel) -> Void
     private var onSetHideInFullscreen: (Bool) -> Void
+    private var onSetPaused: (Bool) -> Void
     private var onOpenSettings: () -> Void
 
     public init(
@@ -48,6 +49,7 @@ public final class MenuBarController: ObservableObject {
         onSetClickThrough: @escaping (Bool) -> Void = { _ in },
         onSetWindowLevel: @escaping (PetWindowLevel) -> Void = { _ in },
         onSetHideInFullscreen: @escaping (Bool) -> Void = { _ in },
+        onSetPaused: @escaping (Bool) -> Void = { _ in },
         onOpenSettings: @escaping () -> Void = {}
     ) {
         self.viewModel = viewModel
@@ -57,6 +59,7 @@ public final class MenuBarController: ObservableObject {
         self.onSetClickThrough = onSetClickThrough
         self.onSetWindowLevel = onSetWindowLevel
         self.onSetHideInFullscreen = onSetHideInFullscreen
+        self.onSetPaused = onSetPaused
         self.onOpenSettings = onOpenSettings
     }
 
@@ -77,7 +80,8 @@ public final class MenuBarController: ObservableObject {
     }
 
     public func setPaused(_ paused: Bool) {
-        viewModel.updateState { $0.isPaused = paused }
+        viewModel.setPaused(paused)
+        onSetPaused(paused)
     }
 
     public func toggleMuted() {

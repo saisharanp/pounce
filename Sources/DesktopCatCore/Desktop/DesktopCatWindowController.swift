@@ -7,8 +7,13 @@ import SwiftUI
 public final class DesktopCatWindowController: NSWindowController {
     private let workspaceObserver: WorkspaceObserver
     private var screenParametersObserver: NSObjectProtocol?
+    private var windowMoveObserver: NSObjectProtocol?
     private var requestedVisibility = true
-    private var isFullscreenActive = false
+    public private(set) var isFullscreenActive = false
+    public private(set) var isVisible = false
+    public var onVisibilityChanged: ((Bool) -> Void)?
+    public var onFullscreenStateChanged: ((Bool) -> Void)?
+    public var onWindowOriginChanged: ((ScreenRelativePoint) -> Void)?
     private var hidesInFullscreen = true
 
     public init(
@@ -46,7 +51,6 @@ public final class DesktopCatWindowController: NSWindowController {
 
         self.workspaceObserver = workspaceObserver
         super.init(window: panel)
-        resolvedMenuController.connect(windowController: self)
 
         hidesInFullscreen = state.hideInFullscreen
         isFullscreenActive = workspaceObserver.isFullscreenAppActive
@@ -65,6 +69,16 @@ public final class DesktopCatWindowController: NSWindowController {
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.clampToCurrentScreen()
+                self?.workspaceObserver.refresh()
+            }
+        }
+        windowMoveObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didMoveNotification,
+            object: panel,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.persistWindowOrigin()
             }
         }
     }
@@ -77,6 +91,9 @@ public final class DesktopCatWindowController: NSWindowController {
         MainActor.assumeIsolated {
             if let screenParametersObserver {
                 NotificationCenter.default.removeObserver(screenParametersObserver)
+            }
+            if let windowMoveObserver {
+                NotificationCenter.default.removeObserver(windowMoveObserver)
             }
         }
     }
@@ -99,6 +116,10 @@ public final class DesktopCatWindowController: NSWindowController {
         window?.level = level == .desktop
             ? NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopWindow)))
             : .floating
+    }
+
+    public func refreshWorkspaceState() {
+        workspaceObserver.refresh()
     }
 
     public func moveToVisibleFrame(_ visibleFrame: CGRect) {
@@ -152,20 +173,47 @@ public final class DesktopCatWindowController: NSWindowController {
         moveToVisibleFrame(screen.visibleFrame)
     }
 
+    private func persistWindowOrigin() {
+        guard let window,
+              let screen = NSScreen.screens.first(where: { $0.frame.intersects(window.frame) }) ?? NSScreen.main else {
+            return
+        }
+        let visibleFrame = screen.visibleFrame
+        let horizontalSpace = max(0, visibleFrame.width - window.frame.width)
+        let verticalSpace = max(0, visibleFrame.height - window.frame.height)
+        let origin = Self.clampedOrigin(
+            window.frame.origin,
+            windowSize: window.frame.size,
+            visibleFrame: visibleFrame
+        )
+        let relativeOrigin = ScreenRelativePoint(
+            x: horizontalSpace == 0 ? 0 : Double((origin.x - visibleFrame.minX) / horizontalSpace),
+            y: verticalSpace == 0 ? 0 : Double((origin.y - visibleFrame.minY) / verticalSpace)
+        )
+        onWindowOriginChanged?(relativeOrigin)
+    }
+
     private func setFullscreenActive(_ active: Bool) {
         isFullscreenActive = active
         applyVisibility()
+        onFullscreenStateChanged?(active)
     }
 
     private func applyVisibility() {
-        if Self.shouldShow(
+        let visible = Self.shouldShow(
             requestedVisibility: requestedVisibility,
             isFullscreenActive: isFullscreenActive,
             hideInFullscreen: hidesInFullscreen
-        ) {
+        )
+        let visibilityChanged = isVisible != visible
+        isVisible = visible
+        if visible {
             window?.orderFront(nil)
         } else {
             window?.orderOut(nil)
+        }
+        if visibilityChanged {
+            onVisibilityChanged?(visible)
         }
     }
 }
