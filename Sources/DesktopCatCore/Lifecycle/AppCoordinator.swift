@@ -45,7 +45,6 @@ public final class AppCoordinator: ObservableObject {
     private var idleTask: Task<Void, Never>?
     private var activationObserver: NSObjectProtocol?
     private var screenParametersObserver: NSObjectProtocol?
-    private var lastCareUpdate = Date()
     private var isStarted = false
 
     public init(
@@ -77,7 +76,7 @@ public final class AppCoordinator: ObservableObject {
     public func start() {
         guard !isStarted else { return }
         isStarted = true
-        lastCareUpdate = Date()
+        viewModel.restoreElapsedCare(now: Date())
 
         let windowController = DesktopCatWindowController(
             state: viewModel.state,
@@ -144,9 +143,7 @@ public final class AppCoordinator: ObservableObject {
     }
 
     private func refreshLifecycleState() {
-        let now = Date()
-        viewModel.applyElapsedCare(seconds: now.timeIntervalSince(lastCareUpdate))
-        lastCareUpdate = now
+        viewModel.restoreElapsedCare(now: Date())
         windowController?.refreshWorkspaceState()
         updateIdleWork()
     }

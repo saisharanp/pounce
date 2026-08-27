@@ -287,6 +287,35 @@ private let checks = [
             throw CheckFailure(description: "elapsed care update was not gentle and non-punitive")
         }
     },
+    CheckCase(name: "launchRestorationAppliesPersistedElapsedCare") {
+        let defaults = UserDefaults(suiteName: "DesktopCatChecks-\(UUID().uuidString)")!
+        let store = PetStateStore(defaults: defaults)
+        let firstLaunch = Date(timeIntervalSince1970: 1_000_000)
+        let relaunch = firstLaunch.addingTimeInterval(24 * 60 * 60)
+        let original = PetState(
+            mood: CatMood(hunger: 0.25, affection: 0.65, energy: 0.65, playfulness: 0.65),
+            lastCareUpdate: firstLaunch.addingTimeInterval(-24 * 60 * 60)
+        )
+        store.save(original)
+
+        let launchModel = CatViewModel(store: store)
+        launchModel.restoreElapsedCare(now: firstLaunch)
+        let afterLaunch = store.load()
+
+        guard afterLaunch.lastCareUpdate == firstLaunch,
+              afterLaunch.mood.hunger > original.mood.hunger else {
+            throw CheckFailure(description: "launch restoration did not apply persisted elapsed care")
+        }
+
+        let relaunchModel = CatViewModel(store: store)
+        relaunchModel.restoreElapsedCare(now: relaunch)
+        let afterRelaunch = store.load()
+
+        guard afterRelaunch.lastCareUpdate == relaunch,
+              afterRelaunch.mood.hunger > afterLaunch.mood.hunger else {
+            throw CheckFailure(description: "relaunch did not apply care since the persisted launch timestamp")
+        }
+    },
     CheckCase(name: "selectedToyIsTransientAndCompletesEveryInteraction") {
         let defaults = UserDefaults(suiteName: "DesktopCatChecks-\(UUID().uuidString)")!
         let store = PetStateStore(defaults: defaults)
@@ -1026,6 +1055,30 @@ private let checks = [
 
         guard isFullscreen else {
             throw CheckFailure(description: "expected unavailable fullscreen data to hide the cat")
+        }
+    },
+    CheckCase(name: "workspaceObserverRefreshesWhenFullscreenAppHides") {
+        let notificationCenter = NotificationCenter()
+        let screen = CGRect(x: 0, y: 0, width: 1_440, height: 900)
+        var windowData: [WorkspaceWindow]? = [
+            WorkspaceWindow(frame: screen, isOnScreen: true, layer: 0)
+        ]
+        let observer = WorkspaceObserver(
+            windowDataProvider: { windowData },
+            screenFrameProvider: { [screen] },
+            notificationCenter: notificationCenter
+        )
+
+        guard observer.isFullscreenAppActive else {
+            throw CheckFailure(description: "the fullscreen fixture did not initialize conservatively")
+        }
+
+        windowData = []
+        notificationCenter.post(name: NSWorkspace.didHideApplicationNotification, object: nil)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+
+        guard !observer.isFullscreenAppActive else {
+            throw CheckFailure(description: "hiding the fullscreen application did not refresh workspace state")
         }
     }
 ]

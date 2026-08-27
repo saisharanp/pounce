@@ -30,6 +30,7 @@ public enum AttentionLevel: String, CaseIterable, Codable, Equatable {
 public struct PetState: Codable, Equatable {
     public var personality: CatPersonality
     public var mood: CatMood
+    public var lastCareUpdate: Date?
     public var isMuted: Bool
     public var isPaused: Bool
     public var clickThrough: Bool
@@ -45,6 +46,7 @@ public struct PetState: Codable, Equatable {
     public init(
         personality: CatPersonality = .playfulKitten,
         mood: CatMood = .init(),
+        lastCareUpdate: Date? = nil,
         isMuted: Bool = false,
         isPaused: Bool = false,
         clickThrough: Bool = false,
@@ -59,6 +61,7 @@ public struct PetState: Codable, Equatable {
     ) {
         self.personality = personality
         self.mood = mood
+        self.lastCareUpdate = lastCareUpdate
         self.isMuted = isMuted
         self.isPaused = isPaused
         self.clickThrough = clickThrough
@@ -75,6 +78,7 @@ public struct PetState: Codable, Equatable {
     private enum CodingKeys: String, CodingKey {
         case personality
         case mood
+        case lastCareUpdate
         case isMuted
         case isPaused
         case clickThrough
@@ -92,6 +96,7 @@ public struct PetState: Codable, Equatable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         personality = try container.decodeIfPresent(CatPersonality.self, forKey: .personality) ?? .playfulKitten
         mood = try container.decodeIfPresent(CatMood.self, forKey: .mood) ?? .init()
+        lastCareUpdate = try? container.decode(Date.self, forKey: .lastCareUpdate)
         isMuted = try container.decodeIfPresent(Bool.self, forKey: .isMuted) ?? false
         isPaused = try container.decodeIfPresent(Bool.self, forKey: .isPaused) ?? false
         clickThrough = try container.decodeIfPresent(Bool.self, forKey: .clickThrough) ?? false

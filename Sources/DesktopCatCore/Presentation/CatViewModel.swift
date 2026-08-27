@@ -82,6 +82,14 @@ public final class CatViewModel: ObservableObject {
         }
     }
 
+    public func restoreElapsedCare(now: Date) {
+        let elapsed = max(0, now.timeIntervalSince(state.lastCareUpdate ?? now))
+        updateState { state in
+            state.mood = state.mood.applyingElapsedCare(seconds: elapsed)
+            state.lastCareUpdate = now
+        }
+    }
+
     public func scheduleIdleActivity(now: Date) {
         guard !state.isPaused else { return }
         activity = scheduler.nextIdleActivity(

@@ -34,6 +34,8 @@ public final class WorkspaceObserver {
     private let notificationCenter: NotificationCenter
     private var activationObserver: NSObjectProtocol?
     private var activeSpaceObserver: NSObjectProtocol?
+    private var hideObserver: NSObjectProtocol?
+    private var unhideObserver: NSObjectProtocol?
 
     public convenience init() {
         let workspace = NSWorkspace.shared
@@ -72,6 +74,24 @@ public final class WorkspaceObserver {
                 self?.refresh()
             }
         }
+        hideObserver = notificationCenter.addObserver(
+            forName: NSWorkspace.didHideApplicationNotification,
+            object: observedWorkspace,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.refresh()
+            }
+        }
+        unhideObserver = notificationCenter.addObserver(
+            forName: NSWorkspace.didUnhideApplicationNotification,
+            object: observedWorkspace,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.refresh()
+            }
+        }
         refresh()
     }
 
@@ -82,6 +102,12 @@ public final class WorkspaceObserver {
             }
             if let activeSpaceObserver {
                 notificationCenter.removeObserver(activeSpaceObserver)
+            }
+            if let hideObserver {
+                notificationCenter.removeObserver(hideObserver)
+            }
+            if let unhideObserver {
+                notificationCenter.removeObserver(unhideObserver)
             }
         }
     }
