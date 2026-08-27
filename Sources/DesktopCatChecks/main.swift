@@ -56,6 +56,31 @@ private struct CatInspectionGrid: View {
     }
 }
 
+@MainActor
+private func nativeSnapshot<Content: View>(
+    of content: Content,
+    size: CGSize
+) -> NSImage? {
+    let hostingView = NSHostingView(rootView: content)
+    hostingView.frame = CGRect(origin: .zero, size: size)
+    let window = NSWindow(
+        contentRect: CGRect(origin: CGPoint(x: -20_000, y: -20_000), size: size),
+        styleMask: [.borderless],
+        backing: .buffered,
+        defer: false
+    )
+    window.contentView = hostingView
+    hostingView.layoutSubtreeIfNeeded()
+    hostingView.displayIfNeeded()
+    guard let bitmap = hostingView.bitmapImageRepForCachingDisplay(in: hostingView.bounds) else {
+        return nil
+    }
+    hostingView.cacheDisplay(in: hostingView.bounds, to: bitmap)
+    let image = NSImage(size: size)
+    image.addRepresentation(bitmap)
+    return image
+}
+
 private let checks = [
     CheckCase(name: "playfulPersonalityPrefersPlayOverSleep") {
         let playWeight = CatPersonality.playfulKitten.weight(for: .pouncing)
@@ -204,6 +229,245 @@ private let checks = [
         }
         guard model.expression == .slowBlink else {
             throw CheckFailure(description: "gentle petting did not synchronously select a slow blink")
+        }
+    },
+    CheckCase(name: "selectedToyIsTransientAndCompletesEveryInteraction") {
+        let defaults = UserDefaults(suiteName: "DesktopCatChecks-\(UUID().uuidString)")!
+        let store = PetStateStore(defaults: defaults)
+        let model = CatViewModel(store: store)
+        let expectedReactions: [(CatToy, CatActivity, CatExpression)] = [
+            (.laser, .pouncing, .neutral),
+            (.yarn, .pouncing, .chirp),
+            (.feather, .lookingAround, .chirp),
+            (.paperBall, .pouncing, .chirp),
+            (.treat, .eating, .purr)
+        ]
+
+        for (toy, expectedActivity, expectedExpression) in expectedReactions {
+            model.selectToy(toy)
+            guard model.selectedToy == toy else {
+                throw CheckFailure(description: "\(toy) did not become the transient selected toy")
+            }
+            model.completeSelectedToy()
+            guard model.selectedToy == nil,
+                  model.activity == expectedActivity,
+                  model.expression == expectedExpression else {
+                throw CheckFailure(description: "\(toy) did not complete with its approved reaction")
+            }
+        }
+
+        guard store.load() == PetState() else {
+            throw CheckFailure(description: "transient toy selection leaked into persisted pet state")
+        }
+    },
+    CheckCase(name: "treatActionSelectsEatingReaction") {
+        let defaults = UserDefaults(suiteName: "DesktopCatChecks-\(UUID().uuidString)")!
+        let model = CatViewModel(store: PetStateStore(defaults: defaults))
+
+        model.handle(.treat)
+
+        guard model.activity == .eating else {
+            throw CheckFailure(description: "the treat action did not select the eating reaction")
+        }
+    },
+    CheckCase(name: "proceduralSoundsHonorMuteAndClampedVolume") {
+        guard CatSoundController.playbackPlan(
+            for: .purr,
+            isMuted: true,
+            volume: 0.8
+        ) == nil else {
+            throw CheckFailure(description: "muted sound created a playback plan")
+        }
+
+        guard let plan = CatSoundController.playbackPlan(
+            for: .play,
+            isMuted: false,
+            volume: 3
+        ) else {
+            throw CheckFailure(description: "enabled sound did not create a playback plan")
+        }
+        guard plan.volume == 1,
+              plan.data.count > 44,
+              String(data: plan.data.prefix(4), encoding: .ascii) == "RIFF",
+              String(data: plan.data.dropFirst(8).prefix(4), encoding: .ascii) == "WAVE" else {
+            throw CheckFailure(description: "procedural playback was not a clamped local WAV tone")
+        }
+
+        let distinctTones = Set(CatSoundKind.allCases.map {
+            CatSoundController.toneData(for: $0)
+        })
+        guard distinctTones.count == CatSoundKind.allCases.count else {
+            throw CheckFailure(description: "one or more approved cat responses shared the same tone")
+        }
+    },
+    CheckCase(name: "interactionsRouteEveryApprovedSoundResponse") {
+        let mappings: [(CatInteraction, CatReaction, CatSoundKind)] = [
+            (.gentlePet, CatReaction(activity: .kneading, expression: .slowBlink), .purr),
+            (.click, CatReaction(activity: .sitting, expression: .meow), .meow),
+            (.feather, CatReaction(activity: .lookingAround, expression: .chirp), .chirp),
+            (.laser, CatReaction(activity: .pouncing, expression: .neutral), .play),
+            (.treat, CatReaction(activity: .eating, expression: .purr), .eat)
+        ]
+
+        for (interaction, reaction, expected) in mappings {
+            guard CatSoundController.sound(for: interaction, reaction: reaction) == expected else {
+                throw CheckFailure(description: "\(expected.rawValue) did not map from its approved response")
+            }
+        }
+    },
+    CheckCase(name: "menuControllerRoutesActionsAndPersistsSettings") {
+        let defaults = UserDefaults(suiteName: "DesktopCatChecks-\(UUID().uuidString)")!
+        let store = PetStateStore(defaults: defaults)
+        let model = CatViewModel(store: store)
+        var visibilityChanges: [Bool] = []
+        var clickThroughChanges: [Bool] = []
+        var levelChanges: [PetWindowLevel] = []
+        let controls = MenuBarController(
+            viewModel: model,
+            onSetVisibility: { visibilityChanges.append($0) },
+            onSetClickThrough: { clickThroughChanges.append($0) },
+            onSetWindowLevel: { levelChanges.append($0) }
+        )
+
+        controls.hide()
+        controls.summon()
+        controls.togglePause()
+        controls.toggleMuted()
+        controls.setClickThrough(true)
+        controls.setWindowLevel(.floating)
+        controls.setPersonality(.curiousExplorer)
+        controls.setAttentionLevel(.lively)
+        controls.setHideInFullscreen(false)
+        controls.setSoundVolume(-0.5)
+        controls.selectToy(.treat)
+        controls.completeSelectedToy()
+
+        guard visibilityChanges == [false, true],
+              clickThroughChanges == [true],
+              levelChanges == [.floating] else {
+            throw CheckFailure(description: "menu actions did not reach their explicit window callbacks")
+        }
+        guard model.state.isPaused,
+              model.state.isMuted,
+              model.state.clickThrough,
+              model.state.windowLevel == .floating,
+              model.state.personality == .curiousExplorer,
+              model.state.attentionLevel == .lively,
+              !model.state.hideInFullscreen,
+              model.state.soundVolume == 0 else {
+            throw CheckFailure(description: "menu controls did not update the complete persisted state")
+        }
+        guard model.activity == .eating, model.selectedToy == nil else {
+            throw CheckFailure(description: "the treat control did not complete through the model API")
+        }
+        guard store.load() == model.state else {
+            throw CheckFailure(description: "menu-driven settings did not survive persistence")
+        }
+    },
+    CheckCase(name: "keyboardActionsAreCompleteAndDiscoverable") {
+        let shortcuts = DesktopCatKeyboardAction.allCases.map {
+            ($0.title, $0.key, $0.modifierDescription)
+        }
+        let expected = [
+            ("Summon or Hide", "C", "Command-Shift"),
+            ("Pause or Resume", "P", "Command-Shift"),
+            ("Mute or Unmute", "M", "Command-Shift")
+        ]
+
+        guard shortcuts.count == expected.count else {
+            throw CheckFailure(description: "the discoverable shortcut list was incomplete")
+        }
+        for (actual, expectedShortcut) in zip(shortcuts, expected) {
+            guard actual.0 == expectedShortcut.0,
+                  actual.1 == expectedShortcut.1,
+                  actual.2 == expectedShortcut.2 else {
+                throw CheckFailure(description: "keyboard action \(actual.0) had the wrong discoverable shortcut")
+            }
+        }
+    },
+    CheckCase(name: "toyOverlayRendersEveryApprovedControl") {
+        guard CatToy.allCases.map(\.displayName) == [
+            "Laser", "Yarn", "Feather", "Paper Ball", "Treat"
+        ] else {
+            throw CheckFailure(description: "the toy overlay did not expose all five approved labels")
+        }
+
+        for toy in CatToy.allCases {
+            let renderer = ImageRenderer(
+                content: ToyOverlayView(
+                    selectedToy: toy,
+                    reducedMotion: true,
+                    onCompleted: {}
+                )
+                .frame(width: 180, height: 180)
+            )
+            renderer.scale = 2
+            guard let image = renderer.nsImage,
+                  let representation = image.tiffRepresentation,
+                  representation.count > 500 else {
+                throw CheckFailure(description: "\(toy.displayName) did not render a visible native overlay")
+            }
+        }
+    },
+    CheckCase(name: "catViewRendersTransientToyOverlay") {
+        let defaults = UserDefaults(suiteName: "DesktopCatChecks-\(UUID().uuidString)")!
+        let model = CatViewModel(store: PetStateStore(defaults: defaults))
+        let controller = MenuBarController(viewModel: model)
+        let plainRenderer = ImageRenderer(
+            content: CatView(viewModel: model, controller: controller)
+                .frame(width: 180, height: 180)
+        )
+        plainRenderer.scale = 2
+        guard let plain = plainRenderer.nsImage?.tiffRepresentation else {
+            throw CheckFailure(description: "the base cat view did not render")
+        }
+
+        model.selectToy(.treat)
+        let toyRenderer = ImageRenderer(
+            content: CatView(viewModel: model, controller: controller)
+                .frame(width: 180, height: 180)
+        )
+        toyRenderer.scale = 2
+        guard let withToy = toyRenderer.nsImage?.tiffRepresentation,
+              withToy != plain else {
+            throw CheckFailure(description: "the selected treat was not composed over the cat view")
+        }
+    },
+    CheckCase(name: "menuAndSettingsSurfacesRenderNatively") {
+        let defaults = UserDefaults(suiteName: "DesktopCatChecks-\(UUID().uuidString)")!
+        let controls = MenuBarController(
+            viewModel: CatViewModel(store: PetStateStore(defaults: defaults))
+        )
+        guard let settingsImage = nativeSnapshot(
+            of: SettingsView(controller: controls),
+            size: CGSize(width: 480, height: 780)
+        ),
+            let settings = settingsImage.tiffRepresentation,
+            settings.count > 2_000,
+            let menuImage = nativeSnapshot(
+                of: MenuBarContent(controller: controls),
+                size: CGSize(width: 330, height: 780)
+            ),
+            let menu = menuImage.tiffRepresentation,
+            menu.count > 2_000 else {
+            throw CheckFailure(description: "menu-bar or settings controls did not render visibly")
+        }
+
+        if let snapshotPath = ProcessInfo.processInfo.environment["DESKTOP_CAT_CONTROLS_SNAPSHOT_PATH"] {
+            let image = NSImage(size: CGSize(width: 846, height: 816))
+            image.lockFocus()
+            NSColor.windowBackgroundColor.setFill()
+            NSRect(origin: .zero, size: image.size).fill()
+            menuImage.draw(at: CGPoint(x: 18, y: 18), from: .zero, operation: .copy, fraction: 1)
+            settingsImage.draw(at: CGPoint(x: 348, y: 18), from: .zero, operation: .copy, fraction: 1)
+            image.unlockFocus()
+            guard let tiff = image.tiffRepresentation,
+                  let bitmap = NSBitmapImageRep(data: tiff),
+                  let png = bitmap.representation(using: .png, properties: [:]) else {
+                throw CheckFailure(description: "the control inspection image could not be encoded")
+            }
+            try png.write(to: URL(fileURLWithPath: snapshotPath), options: .atomic)
+            print("SNAPSHOT \(snapshotPath)")
         }
     },
     CheckCase(name: "viewModelRetainsTwoRecentIdleActivities") {
@@ -522,6 +786,42 @@ private let checks = [
             throw CheckFailure(description: "care, accessibility, scale, or placement state did not round-trip")
         }
     },
+    CheckCase(name: "taskSevenPreferencesRoundTripAndClampVolume") {
+        let defaults = UserDefaults(suiteName: "DesktopCatChecks-\(UUID().uuidString)")!
+        let store = PetStateStore(defaults: defaults)
+        let expected = PetState(
+            soundVolume: 1.4,
+            hideInFullscreen: false,
+            attentionLevel: .lively
+        )
+
+        store.save(expected)
+        let restored = store.load()
+
+        guard restored.soundVolume == 1 else {
+            throw CheckFailure(description: "sound volume was not clamped to the persisted 0...1 range")
+        }
+        guard !restored.hideInFullscreen, restored.attentionLevel == .lively else {
+            throw CheckFailure(description: "fullscreen or attention preferences did not round-trip")
+        }
+    },
+    CheckCase(name: "legacyStateUsesSafeTaskSevenDefaults") {
+        let defaults = UserDefaults(suiteName: "DesktopCatChecks-\(UUID().uuidString)")!
+        defaults.set(
+            Data(#"{"personality":"sleepyLoaf","soundVolume":-3,"attentionLevel":"unknown"}"#.utf8),
+            forKey: "pet-state"
+        )
+        let restored = PetStateStore(defaults: defaults).load()
+
+        guard restored.personality == .sleepyLoaf else {
+            throw CheckFailure(description: "an invalid new preference discarded valid legacy state")
+        }
+        guard restored.soundVolume == 0,
+              restored.hideInFullscreen,
+              restored.attentionLevel == .balanced else {
+            throw CheckFailure(description: "legacy state did not receive safe task-seven preference defaults")
+        }
+    },
     CheckCase(name: "absentStoredDataReturnsSafeDefaults") {
         let defaults = UserDefaults(suiteName: "DesktopCatChecks-\(UUID().uuidString)")!
         let store = PetStateStore(defaults: defaults)
@@ -586,6 +886,29 @@ private let checks = [
 
         guard result == CGPoint(x: 40, y: 30) else {
             throw CheckFailure(description: "expected oversized window to anchor at visible-frame origin, got \(result)")
+        }
+    },
+    CheckCase(name: "fullscreenHidingPreferenceControlsVisibilityPolicy") {
+        guard !DesktopCatWindowController.shouldShow(
+            requestedVisibility: true,
+            isFullscreenActive: true,
+            hideInFullscreen: true
+        ) else {
+            throw CheckFailure(description: "fullscreen hiding did not suppress a requested cat window")
+        }
+        guard DesktopCatWindowController.shouldShow(
+            requestedVisibility: true,
+            isFullscreenActive: true,
+            hideInFullscreen: false
+        ) else {
+            throw CheckFailure(description: "disabling fullscreen hiding did not reveal the requested cat window")
+        }
+        guard !DesktopCatWindowController.shouldShow(
+            requestedVisibility: false,
+            isFullscreenActive: false,
+            hideInFullscreen: false
+        ) else {
+            throw CheckFailure(description: "fullscreen preference overrode an explicit hide action")
         }
     },
     CheckCase(name: "fullscreenClassificationRecognizesScreenCoveringWindow") {

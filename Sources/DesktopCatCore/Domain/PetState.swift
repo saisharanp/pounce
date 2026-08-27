@@ -20,6 +20,12 @@ public enum PetWindowLevel: String, Codable, Equatable {
     case floating
 }
 
+public enum AttentionLevel: String, CaseIterable, Codable, Equatable {
+    case calm
+    case balanced
+    case lively
+}
+
 /// The local, lightweight state restored when the companion launches.
 public struct PetState: Codable, Equatable {
     public var personality: CatPersonality
@@ -32,6 +38,9 @@ public struct PetState: Codable, Equatable {
     public var catScale: Double
     public var windowOrigin: ScreenRelativePoint
     public var windowLevel: PetWindowLevel
+    public var soundVolume: Double
+    public var hideInFullscreen: Bool
+    public var attentionLevel: AttentionLevel
 
     public init(
         personality: CatPersonality = .playfulKitten,
@@ -43,7 +52,10 @@ public struct PetState: Codable, Equatable {
         highContrast: Bool = false,
         catScale: Double = 1.0,
         windowOrigin: ScreenRelativePoint = .init(),
-        windowLevel: PetWindowLevel = .desktop
+        windowLevel: PetWindowLevel = .desktop,
+        soundVolume: Double = 0.65,
+        hideInFullscreen: Bool = true,
+        attentionLevel: AttentionLevel = .balanced
     ) {
         self.personality = personality
         self.mood = mood
@@ -55,6 +67,9 @@ public struct PetState: Codable, Equatable {
         self.catScale = catScale
         self.windowOrigin = windowOrigin
         self.windowLevel = windowLevel
+        self.soundVolume = Self.clampedVolume(soundVolume)
+        self.hideInFullscreen = hideInFullscreen
+        self.attentionLevel = attentionLevel
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -68,6 +83,9 @@ public struct PetState: Codable, Equatable {
         case catScale
         case windowOrigin
         case windowLevel
+        case soundVolume
+        case hideInFullscreen
+        case attentionLevel
     }
 
     public init(from decoder: Decoder) throws {
@@ -82,5 +100,17 @@ public struct PetState: Codable, Equatable {
         catScale = try container.decodeIfPresent(Double.self, forKey: .catScale) ?? 1.0
         windowOrigin = try container.decodeIfPresent(ScreenRelativePoint.self, forKey: .windowOrigin) ?? .init()
         windowLevel = try container.decodeIfPresent(PetWindowLevel.self, forKey: .windowLevel) ?? .desktop
+        soundVolume = Self.clampedVolume(
+            (try? container.decodeIfPresent(Double.self, forKey: .soundVolume)) ?? 0.65
+        )
+        hideInFullscreen =
+            (try? container.decodeIfPresent(Bool.self, forKey: .hideInFullscreen)) ?? true
+        attentionLevel =
+            (try? container.decodeIfPresent(AttentionLevel.self, forKey: .attentionLevel)) ?? .balanced
+    }
+
+    public static func clampedVolume(_ volume: Double) -> Double {
+        guard volume.isFinite else { return 0.65 }
+        return min(max(volume, 0), 1)
     }
 }

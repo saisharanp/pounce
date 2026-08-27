@@ -321,29 +321,42 @@ public struct CatPose: Hashable, Sendable {
 @MainActor
 public struct CatView: View {
     @ObservedObject private var viewModel: CatViewModel
+    @ObservedObject private var controller: MenuBarController
     @State private var phase = false
     @State private var dragStartedAt: Date?
     @State private var recentContacts: [Date] = []
 
-    public init(viewModel: CatViewModel) {
+    public init(viewModel: CatViewModel, controller: MenuBarController) {
         self.viewModel = viewModel
+        self.controller = controller
     }
 
     public var body: some View {
-        OrangeTabbyShape(
-            pose: CatPose(
-                activity: viewModel.activity,
-                expression: viewModel.expression,
-                phase: phase,
-                motionAllowed: motionAllowed
-            ),
-            highContrast: viewModel.state.highContrast
-        )
-        .frame(width: 132, height: 132)
-        .contentShape(CatHitAreaShape())
-        .gesture(catGesture)
-        .scaleEffect(catScale)
+        ZStack {
+            OrangeTabbyShape(
+                pose: CatPose(
+                    activity: viewModel.activity,
+                    expression: viewModel.expression,
+                    phase: phase,
+                    motionAllowed: motionAllowed
+                ),
+                highContrast: viewModel.state.highContrast
+            )
+            .frame(width: 132, height: 132)
+            .contentShape(CatHitAreaShape())
+            .gesture(catGesture)
+            .scaleEffect(catScale)
+
+            ToyOverlayView(
+                selectedToy: viewModel.selectedToy,
+                reducedMotion: viewModel.state.reducedMotion,
+                onCompleted: { controller.completeSelectedToy() }
+            )
+        }
         .frame(width: 180, height: 180)
+        .contextMenu {
+            CatContextMenuContent(controller: controller)
+        }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Orange tabby, \(viewModel.activity.rawValue)")
         .task(id: animationToken) {
@@ -388,7 +401,7 @@ public struct CatView: View {
                     recentContactCount: recentContacts.count
                 )
                 dragStartedAt = nil
-                viewModel.handle(interaction)
+                controller.handle(interaction)
             }
     }
 

@@ -7,6 +7,7 @@ public final class CatViewModel: ObservableObject {
     @Published public private(set) var expression: CatExpression = .neutral
     @Published public private(set) var reactionNonce: UInt64 = 0
     @Published public private(set) var state: PetState
+    @Published public private(set) var selectedToy: CatToy?
     public private(set) var recentIdleActivities: [CatActivity] = []
 
     private let store: PetStateStore
@@ -23,9 +24,11 @@ public final class CatViewModel: ObservableObject {
         self.store = store
         self.scheduler = scheduler
         state = initialState ?? store.load()
+        selectedToy = nil
     }
 
-    public func handle(_ interaction: CatInteraction) {
+    @discardableResult
+    public func handle(_ interaction: CatInteraction) -> CatReaction {
         let reaction: CatReaction
         switch interaction {
         case .click:
@@ -44,6 +47,18 @@ public final class CatViewModel: ObservableObject {
         activity = reaction.activity
         expression = reaction.expression
         reactionNonce += 1
+        return reaction
+    }
+
+    public func selectToy(_ toy: CatToy?) {
+        selectedToy = toy
+    }
+
+    @discardableResult
+    public func completeSelectedToy() -> CatReaction? {
+        guard let selectedToy else { return nil }
+        self.selectedToy = nil
+        return handle(selectedToy.interaction)
     }
 
     public func updateState(_ update: (inout PetState) -> Void) {

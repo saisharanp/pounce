@@ -7,12 +7,16 @@ import SwiftUI
 public final class DesktopCatWindowController: NSWindowController {
     private let workspaceObserver: WorkspaceObserver
     private var screenParametersObserver: NSObjectProtocol?
+    private var requestedVisibility = true
+    private var isFullscreenActive = false
+    private var hidesInFullscreen = true
 
     public init(
         state: PetState,
         windowSize: CGSize = CGSize(width: 180, height: 180),
         workspaceObserver: WorkspaceObserver = WorkspaceObserver(),
-        viewModel: CatViewModel? = nil
+        viewModel: CatViewModel? = nil,
+        menuController: MenuBarController? = nil
     ) {
         let panel = NSPanel(
             contentRect: CGRect(origin: .zero, size: windowSize),
@@ -29,21 +33,30 @@ public final class DesktopCatWindowController: NSWindowController {
             store: PetStateStore(),
             initialState: state
         )
+        let resolvedMenuController = menuController ?? MenuBarController(
+            viewModel: resolvedViewModel
+        )
         panel.contentView = CatHostingView(
-            rootView: CatView(viewModel: resolvedViewModel),
+            rootView: CatView(
+                viewModel: resolvedViewModel,
+                controller: resolvedMenuController
+            ),
             viewModel: resolvedViewModel
         )
 
         self.workspaceObserver = workspaceObserver
         super.init(window: panel)
+        resolvedMenuController.connect(windowController: self)
 
+        hidesInFullscreen = state.hideInFullscreen
+        isFullscreenActive = workspaceObserver.isFullscreenAppActive
         setWindowLevel(state.windowLevel)
         setClickThrough(state.clickThrough)
         moveToRelativeOrigin(state.windowOrigin)
         workspaceObserver.onFullscreenStateChanged = { [weak self] isFullscreen in
-            self?.setVisible(!isFullscreen)
+            self?.setFullscreenActive(isFullscreen)
         }
-        setVisible(!workspaceObserver.isFullscreenAppActive)
+        applyVisibility()
 
         screenParametersObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification,
@@ -73,11 +86,13 @@ public final class DesktopCatWindowController: NSWindowController {
     }
 
     public func setVisible(_ visible: Bool) {
-        if visible {
-            window?.orderFront(nil)
-        } else {
-            window?.orderOut(nil)
-        }
+        requestedVisibility = visible
+        applyVisibility()
+    }
+
+    public func setHideInFullscreen(_ enabled: Bool) {
+        hidesInFullscreen = enabled
+        applyVisibility()
     }
 
     public func setWindowLevel(_ level: PetWindowLevel) {
@@ -110,6 +125,14 @@ public final class DesktopCatWindowController: NSWindowController {
         )
     }
 
+    public static func shouldShow(
+        requestedVisibility: Bool,
+        isFullscreenActive: Bool,
+        hideInFullscreen: Bool
+    ) -> Bool {
+        requestedVisibility && !(hideInFullscreen && isFullscreenActive)
+    }
+
     private func moveToRelativeOrigin(_ relativeOrigin: ScreenRelativePoint) {
         guard let visibleFrame = NSScreen.main?.visibleFrame,
               let window else { return }
@@ -127,6 +150,23 @@ public final class DesktopCatWindowController: NSWindowController {
         let screen = NSScreen.screens.first { $0.frame.intersects(window.frame) } ?? NSScreen.main
         guard let screen else { return }
         moveToVisibleFrame(screen.visibleFrame)
+    }
+
+    private func setFullscreenActive(_ active: Bool) {
+        isFullscreenActive = active
+        applyVisibility()
+    }
+
+    private func applyVisibility() {
+        if Self.shouldShow(
+            requestedVisibility: requestedVisibility,
+            isFullscreenActive: isFullscreenActive,
+            hideInFullscreen: hidesInFullscreen
+        ) {
+            window?.orderFront(nil)
+        } else {
+            window?.orderOut(nil)
+        }
     }
 }
 
