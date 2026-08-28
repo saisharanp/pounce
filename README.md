@@ -1,6 +1,6 @@
-# Desktop Cat
+# Pounce
 
-Desktop Cat is a native macOS 14+ menu-bar companion: an interactive orange
+Pounce is a native macOS 14+ menu-bar companion: an interactive orange
 tabby overlay that keeps its preferences on this Mac.
 
 ## Build and run
