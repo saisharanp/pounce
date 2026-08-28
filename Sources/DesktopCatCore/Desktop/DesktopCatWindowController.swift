@@ -1,6 +1,19 @@
 import AppKit
 import SwiftUI
 
+/// A connected display used to resolve the persisted normalized window origin.
+/// Its identifier is AppKit's stable display number, stored as a string so the
+/// domain model remains AppKit-free and backward compatible.
+public struct DesktopCatDisplay: Equatable {
+    public let identifier: String
+    public let visibleFrame: CGRect
+
+    public init(identifier: String, visibleFrame: CGRect) {
+        self.identifier = identifier
+        self.visibleFrame = visibleFrame
+    }
+}
+
 /// Owns the companion's transparent, non-activating desktop panel. Task 6
 /// replaces its empty SwiftUI host with the cat renderer.
 @MainActor
@@ -13,7 +26,7 @@ public final class DesktopCatWindowController: NSWindowController {
     public private(set) var isVisible = false
     public var onVisibilityChanged: ((Bool) -> Void)?
     public var onFullscreenStateChanged: ((Bool) -> Void)?
-    public var onWindowOriginChanged: ((ScreenRelativePoint) -> Void)?
+    public var onWindowOriginChanged: ((ScreenRelativePoint, String?) -> Void)?
     private var hidesInFullscreen = true
 
     public init(
@@ -56,7 +69,10 @@ public final class DesktopCatWindowController: NSWindowController {
         isFullscreenActive = workspaceObserver.isFullscreenAppActive
         setWindowLevel(state.windowLevel)
         setClickThrough(state.clickThrough)
-        moveToRelativeOrigin(state.windowOrigin)
+        moveToRelativeOrigin(
+            state.windowOrigin,
+            displayIdentifier: state.windowDisplayIdentifier
+        )
         workspaceObserver.onFullscreenStateChanged = { [weak self] isFullscreen in
             self?.setFullscreenActive(isFullscreen)
         }
@@ -154,16 +170,52 @@ public final class DesktopCatWindowController: NSWindowController {
         requestedVisibility && !(hideInFullscreen && isFullscreenActive)
     }
 
-    private func moveToRelativeOrigin(_ relativeOrigin: ScreenRelativePoint) {
-        guard let visibleFrame = NSScreen.main?.visibleFrame,
-              let window else { return }
+    public static func restoredOrigin(
+        relativeOrigin: ScreenRelativePoint,
+        windowSize: CGSize,
+        savedDisplayIdentifier: String?,
+        displays: [DesktopCatDisplay],
+        primaryDisplayIdentifier: String?
+    ) -> CGPoint? {
+        guard let primaryDisplay = displays.first(where: { $0.identifier == primaryDisplayIdentifier })
+                ?? displays.first else {
+            return nil
+        }
+        let display = savedDisplayIdentifier.flatMap { savedIdentifier in
+            displays.first(where: { $0.identifier == savedIdentifier })
+        } ?? primaryDisplay
+        let visibleFrame = display.visibleFrame
         let origin = CGPoint(
-            x: visibleFrame.minX + CGFloat(relativeOrigin.x) * max(0, visibleFrame.width - window.frame.width),
-            y: visibleFrame.minY + CGFloat(relativeOrigin.y) * max(0, visibleFrame.height - window.frame.height)
+            x: visibleFrame.minX + CGFloat(relativeOrigin.x) * max(0, visibleFrame.width - windowSize.width),
+            y: visibleFrame.minY + CGFloat(relativeOrigin.y) * max(0, visibleFrame.height - windowSize.height)
         )
-        window.setFrameOrigin(
-            Self.clampedOrigin(origin, windowSize: window.frame.size, visibleFrame: visibleFrame)
-        )
+        return Self.clampedOrigin(origin, windowSize: windowSize, visibleFrame: visibleFrame)
+    }
+
+    public static func displayIdentifier(for screen: NSScreen) -> String? {
+        let key = NSDeviceDescriptionKey("NSScreenNumber")
+        guard let number = screen.deviceDescription[key] as? NSNumber else { return nil }
+        return String(number.uint32Value)
+    }
+
+    private func moveToRelativeOrigin(
+        _ relativeOrigin: ScreenRelativePoint,
+        displayIdentifier: String?
+    ) {
+        guard let window else { return }
+        let displays = NSScreen.screens.compactMap { screen -> DesktopCatDisplay? in
+            guard let identifier = Self.displayIdentifier(for: screen) else { return nil }
+            return DesktopCatDisplay(identifier: identifier, visibleFrame: screen.visibleFrame)
+        }
+        let primaryIdentifier = NSScreen.main.flatMap(Self.displayIdentifier(for:))
+        guard let origin = Self.restoredOrigin(
+            relativeOrigin: relativeOrigin,
+            windowSize: window.frame.size,
+            savedDisplayIdentifier: displayIdentifier,
+            displays: displays,
+            primaryDisplayIdentifier: primaryIdentifier
+        ) else { return }
+        window.setFrameOrigin(origin)
     }
 
     private func clampToCurrentScreen() {
@@ -171,6 +223,7 @@ public final class DesktopCatWindowController: NSWindowController {
         let screen = NSScreen.screens.first { $0.frame.intersects(window.frame) } ?? NSScreen.main
         guard let screen else { return }
         moveToVisibleFrame(screen.visibleFrame)
+        persistWindowOrigin()
     }
 
     private func persistWindowOrigin() {
@@ -190,7 +243,7 @@ public final class DesktopCatWindowController: NSWindowController {
             x: horizontalSpace == 0 ? 0 : Double((origin.x - visibleFrame.minX) / horizontalSpace),
             y: verticalSpace == 0 ? 0 : Double((origin.y - visibleFrame.minY) / verticalSpace)
         )
-        onWindowOriginChanged?(relativeOrigin)
+        onWindowOriginChanged?(relativeOrigin, Self.displayIdentifier(for: screen))
     }
 
     private func setFullscreenActive(_ active: Bool) {

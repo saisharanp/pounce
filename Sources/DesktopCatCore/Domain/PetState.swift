@@ -38,6 +38,7 @@ public struct PetState: Codable, Equatable {
     public var highContrast: Bool
     public var catScale: Double
     public var windowOrigin: ScreenRelativePoint
+    public var windowDisplayIdentifier: String?
     public var windowLevel: PetWindowLevel
     public var soundVolume: Double
     public var hideInFullscreen: Bool
@@ -54,6 +55,7 @@ public struct PetState: Codable, Equatable {
         highContrast: Bool = false,
         catScale: Double = 1.0,
         windowOrigin: ScreenRelativePoint = .init(),
+        windowDisplayIdentifier: String? = nil,
         windowLevel: PetWindowLevel = .desktop,
         soundVolume: Double = 0.65,
         hideInFullscreen: Bool = true,
@@ -69,6 +71,7 @@ public struct PetState: Codable, Equatable {
         self.highContrast = highContrast
         self.catScale = catScale
         self.windowOrigin = windowOrigin
+        self.windowDisplayIdentifier = windowDisplayIdentifier
         self.windowLevel = windowLevel
         self.soundVolume = Self.clampedVolume(soundVolume)
         self.hideInFullscreen = hideInFullscreen
@@ -86,6 +89,7 @@ public struct PetState: Codable, Equatable {
         case highContrast
         case catScale
         case windowOrigin
+        case windowDisplayIdentifier
         case windowLevel
         case soundVolume
         case hideInFullscreen
@@ -104,6 +108,7 @@ public struct PetState: Codable, Equatable {
         highContrast = try container.decodeIfPresent(Bool.self, forKey: .highContrast) ?? false
         catScale = try container.decodeIfPresent(Double.self, forKey: .catScale) ?? 1.0
         windowOrigin = try container.decodeIfPresent(ScreenRelativePoint.self, forKey: .windowOrigin) ?? .init()
+        windowDisplayIdentifier = try container.decodeIfPresent(String.self, forKey: .windowDisplayIdentifier)
         windowLevel = try container.decodeIfPresent(PetWindowLevel.self, forKey: .windowLevel) ?? .desktop
         soundVolume = Self.clampedVolume(
             (try? container.decodeIfPresent(Double.self, forKey: .soundVolume)) ?? 0.65

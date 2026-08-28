@@ -276,6 +276,34 @@ private let checks = [
             throw CheckFailure(description: "attention levels did not use the approved idle intervals")
         }
     },
+    CheckCase(name: "coordinatorDirectReactionReplacesPendingIdleSchedule") {
+        let defaults = UserDefaults(suiteName: "DesktopCatChecks-\(UUID().uuidString)")!
+        let screen = CGRect(x: 0, y: 0, width: 1_440, height: 900)
+        let workspaceObserver = WorkspaceObserver(
+            windowDataProvider: { [] },
+            screenFrameProvider: { [screen] }
+        )
+        let coordinator = AppCoordinator(
+            store: PetStateStore(defaults: defaults),
+            workspaceObserver: workspaceObserver
+        )
+
+        coordinator.start()
+        let initialSchedule = coordinator.idleScheduleRevision
+        coordinator.menuController.handle(.gentlePet)
+        let reactionSchedule = coordinator.idleScheduleRevision
+        coordinator.menuController.setAttentionLevel(.lively)
+        let attentionSchedule = coordinator.idleScheduleRevision
+
+        guard coordinator.hasStarted,
+              initialSchedule > 0,
+              reactionSchedule == initialSchedule + 1,
+              attentionSchedule == reactionSchedule + 1 else {
+            throw CheckFailure(
+                description: "direct reactions or attention changes did not replace the coordinator idle schedule"
+            )
+        }
+    },
     CheckCase(name: "elapsedCareUpdateIsGentleAndNeverPunishes") {
         let updated = CatMood().applyingElapsedCare(seconds: 24 * 60 * 60)
 
@@ -467,6 +495,27 @@ private let checks = [
                   actual.1 == expectedShortcut.1,
                   actual.2 == expectedShortcut.2 else {
                 throw CheckFailure(description: "keyboard action \(actual.0) had the wrong discoverable shortcut")
+            }
+        }
+    },
+    CheckCase(name: "systemHotKeysMatchDiscoverableShortcuts") {
+        let hotKeys = DesktopCatSystemHotKey.allCases.map {
+            ($0.action, $0.keyCode, $0.modifiers)
+        }
+        let expected: [(DesktopCatKeyboardAction, UInt32, UInt32)] = [
+            (.summonOrHide, 8, DesktopCatSystemHotKey.commandShiftModifiers),
+            (.pauseOrResume, 35, DesktopCatSystemHotKey.commandShiftModifiers),
+            (.muteOrUnmute, 46, DesktopCatSystemHotKey.commandShiftModifiers)
+        ]
+
+        guard hotKeys.count == expected.count else {
+            throw CheckFailure(description: "the system hot-key registry was incomplete")
+        }
+        for (actual, expectedHotKey) in zip(hotKeys, expected) {
+            guard actual.0 == expectedHotKey.0,
+                  actual.1 == expectedHotKey.1,
+                  actual.2 == expectedHotKey.2 else {
+                throw CheckFailure(description: "a system hot key did not match its advertised shortcut")
             }
         }
     },
@@ -862,6 +911,7 @@ private let checks = [
             highContrast: true,
             catScale: 1.35,
             windowOrigin: ScreenRelativePoint(x: 0.82, y: 0.18),
+            windowDisplayIdentifier: "42",
             windowLevel: .floating
         )
 
@@ -869,6 +919,21 @@ private let checks = [
 
         guard store.load() == expected else {
             throw CheckFailure(description: "care, accessibility, scale, or placement state did not round-trip")
+        }
+    },
+    CheckCase(name: "legacyPlacementDecodesWithoutDisplayIdentifier") {
+        let original = PetState(windowOrigin: ScreenRelativePoint(x: 0.82, y: 0.18))
+        let encoded = try JSONEncoder().encode(original)
+        guard var legacyPayload = try JSONSerialization.jsonObject(with: encoded) as? [String: Any] else {
+            throw CheckFailure(description: "could not create a legacy placement fixture")
+        }
+        legacyPayload.removeValue(forKey: "windowDisplayIdentifier")
+        let legacyData = try JSONSerialization.data(withJSONObject: legacyPayload)
+        let decoded = try JSONDecoder().decode(PetState.self, from: legacyData)
+
+        guard decoded.windowOrigin == original.windowOrigin,
+              decoded.windowDisplayIdentifier == nil else {
+            throw CheckFailure(description: "legacy placement did not safely default its missing display identifier")
         }
     },
     CheckCase(name: "taskSevenPreferencesRoundTripAndClampVolume") {
@@ -973,6 +1038,48 @@ private let checks = [
             throw CheckFailure(description: "expected oversized window to anchor at visible-frame origin, got \(result)")
         }
     },
+    CheckCase(name: "savedPlacementRestoresOnMatchingConnectedDisplay") {
+        let primary = DesktopCatDisplay(
+            identifier: "primary",
+            visibleFrame: CGRect(x: 0, y: 0, width: 1_440, height: 900)
+        )
+        let secondary = DesktopCatDisplay(
+            identifier: "secondary",
+            visibleFrame: CGRect(x: -1_280, y: 0, width: 1_280, height: 1_024)
+        )
+        let origin = DesktopCatWindowController.restoredOrigin(
+            relativeOrigin: ScreenRelativePoint(x: 0.5, y: 0.25),
+            windowSize: CGSize(width: 180, height: 180),
+            savedDisplayIdentifier: "secondary",
+            displays: [primary, secondary],
+            primaryDisplayIdentifier: "primary"
+        )
+
+        guard origin == CGPoint(x: -730, y: 211) else {
+            throw CheckFailure(description: "saved placement did not restore on its connected secondary display")
+        }
+    },
+    CheckCase(name: "missingSavedDisplayFallsBackToPrimaryPlacement") {
+        let primary = DesktopCatDisplay(
+            identifier: "primary",
+            visibleFrame: CGRect(x: 0, y: 0, width: 1_440, height: 900)
+        )
+        let secondary = DesktopCatDisplay(
+            identifier: "secondary",
+            visibleFrame: CGRect(x: -1_280, y: 0, width: 1_280, height: 1_024)
+        )
+        let origin = DesktopCatWindowController.restoredOrigin(
+            relativeOrigin: ScreenRelativePoint(x: 0.5, y: 0.25),
+            windowSize: CGSize(width: 180, height: 180),
+            savedDisplayIdentifier: "disconnected",
+            displays: [primary, secondary],
+            primaryDisplayIdentifier: "primary"
+        )
+
+        guard origin == CGPoint(x: 630, y: 180) else {
+            throw CheckFailure(description: "a disconnected display did not fall back to primary placement")
+        }
+    },
     CheckCase(name: "fullscreenHidingPreferenceControlsVisibilityPolicy") {
         guard !DesktopCatWindowController.shouldShow(
             requestedVisibility: true,
@@ -1055,6 +1162,34 @@ private let checks = [
 
         guard isFullscreen else {
             throw CheckFailure(description: "expected unavailable fullscreen data to hide the cat")
+        }
+    },
+    CheckCase(name: "fullscreenClassificationUsesCGFramesForVerticallyArrangedDisplays") {
+        let primary = CGRect(x: 0, y: 0, width: 1_440, height: 900)
+        let upperSecondary = CGRect(x: 0, y: 900, width: 1_280, height: 1_024)
+        let isFullscreen = WorkspaceObserver.isFullscreenAppActive(
+            windowData: [WorkspaceWindow(frame: upperSecondary, isOnScreen: true, layer: 0)],
+            screenFrames: [primary, upperSecondary]
+        )
+
+        guard isFullscreen else {
+            throw CheckFailure(
+                description: "Core Graphics bounds on a vertically arranged secondary display were not recognized"
+            )
+        }
+    },
+    CheckCase(name: "selfFrontmostWorkspaceStateRemainsConservativelyHidden") {
+        let screen = CGRect(x: 0, y: 0, width: 1_440, height: 900)
+        let observer = WorkspaceObserver(
+            windowDataProvider: { [] },
+            screenFrameProvider: { [screen] },
+            isCurrentProcessFrontmostProvider: { true }
+        )
+
+        guard observer.isFullscreenAppActive else {
+            throw CheckFailure(
+                description: "self-frontmost workspace state treated an empty external window list as safe"
+            )
         }
     },
     CheckCase(name: "workspaceObserverRefreshesWhenFullscreenAppHides") {

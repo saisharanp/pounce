@@ -11,6 +11,8 @@ public final class AppCoordinator: ObservableObject {
     public let soundController: CatSoundController
     public private(set) var windowController: DesktopCatWindowController?
     @Published public private(set) var requestedVisibility = true
+    public private(set) var idleScheduleRevision = 0
+    public private(set) var hasStarted = false
 
     public private(set) lazy var menuController: MenuBarController = {
         MenuBarController(
@@ -32,6 +34,12 @@ public final class AppCoordinator: ObservableObject {
             onSetPaused: { [weak self] _ in
                 self?.updateIdleWork()
             },
+            onSetAttentionLevel: { [weak self] _ in
+                self?.updateIdleWork()
+            },
+            onDirectReaction: { [weak self] in
+                self?.updateIdleWork()
+            },
             onOpenSettings: {
                 NSApplication.shared.sendAction(
                     Selector(("showSettingsWindow:")),
@@ -45,7 +53,7 @@ public final class AppCoordinator: ObservableObject {
     private var idleTask: Task<Void, Never>?
     private var activationObserver: NSObjectProtocol?
     private var screenParametersObserver: NSObjectProtocol?
-    private var isStarted = false
+    private var hotKeyController: DesktopCatHotKeyController?
 
     public init(
         store: PetStateStore = PetStateStore(),
@@ -71,11 +79,10 @@ public final class AppCoordinator: ObservableObject {
         }
     }
 
-    /// Creates the panel only after AppKit has launched and is safe to call
-    /// repeatedly from SwiftUI scene appearance callbacks.
+    /// Creates the panel after AppKit launches and is safe to call repeatedly.
     public func start() {
-        guard !isStarted else { return }
-        isStarted = true
+        guard !hasStarted else { return }
+        hasStarted = true
         viewModel.restoreElapsedCare(now: Date())
 
         let windowController = DesktopCatWindowController(
@@ -91,9 +98,13 @@ public final class AppCoordinator: ObservableObject {
         windowController.onFullscreenStateChanged = { [weak self] _ in
             self?.updateIdleWork()
         }
-        windowController.onWindowOriginChanged = { [weak self] origin in
-            self?.viewModel.updateState { $0.windowOrigin = origin }
+        windowController.onWindowOriginChanged = { [weak self] origin, displayIdentifier in
+            self?.viewModel.updateState {
+                $0.windowOrigin = origin
+                $0.windowDisplayIdentifier = displayIdentifier
+            }
         }
+        hotKeyController = DesktopCatHotKeyController(menuController: menuController)
 
         activationObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.didBecomeActiveNotification,
@@ -149,9 +160,10 @@ public final class AppCoordinator: ObservableObject {
     }
 
     private func updateIdleWork() {
+        idleScheduleRevision &+= 1
         idleTask?.cancel()
         idleTask = nil
-        guard isStarted,
+        guard hasStarted,
               let windowController,
               Self.shouldScheduleIdle(
                 isVisible: windowController.isVisible,

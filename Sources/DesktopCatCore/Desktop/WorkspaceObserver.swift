@@ -31,6 +31,7 @@ public final class WorkspaceObserver {
 
     private let windowDataProvider: () -> [WorkspaceWindow]?
     private let screenFrameProvider: () -> [CGRect]
+    private let isCurrentProcessFrontmostProvider: () -> Bool
     private let notificationCenter: NotificationCenter
     private var activationObserver: NSObjectProtocol?
     private var activeSpaceObserver: NSObjectProtocol?
@@ -41,7 +42,13 @@ public final class WorkspaceObserver {
         let workspace = NSWorkspace.shared
         self.init(
             windowDataProvider: { Self.frontmostWindowData(in: workspace) },
-            screenFrameProvider: { NSScreen.screens.map(\.frame) },
+            screenFrameProvider: { Self.coreGraphicsDisplayBounds() },
+            isCurrentProcessFrontmostProvider: {
+                Self.isCurrentProcessFrontmost(
+                    frontmostProcessIdentifier: workspace.frontmostApplication?.processIdentifier,
+                    currentProcessIdentifier: ProcessInfo.processInfo.processIdentifier
+                )
+            },
             notificationCenter: workspace.notificationCenter,
             observedWorkspace: workspace
         )
@@ -50,11 +57,13 @@ public final class WorkspaceObserver {
     public init(
         windowDataProvider: @escaping () -> [WorkspaceWindow]?,
         screenFrameProvider: @escaping () -> [CGRect],
+        isCurrentProcessFrontmostProvider: @escaping () -> Bool = { false },
         notificationCenter: NotificationCenter = .default,
         observedWorkspace: NSWorkspace? = nil
     ) {
         self.windowDataProvider = windowDataProvider
         self.screenFrameProvider = screenFrameProvider
+        self.isCurrentProcessFrontmostProvider = isCurrentProcessFrontmostProvider
         self.notificationCenter = notificationCenter
         activationObserver = notificationCenter.addObserver(
             forName: NSWorkspace.didActivateApplicationNotification,
@@ -113,6 +122,12 @@ public final class WorkspaceObserver {
     }
 
     public func refresh() {
+        guard !isCurrentProcessFrontmostProvider() else {
+            // No external frontmost window can be classified while this app is
+            // frontmost, so retain the conservative hidden state.
+            isFullscreenAppActive = true
+            return
+        }
         isFullscreenAppActive = Self.isFullscreenAppActive(
             windowData: windowDataProvider(),
             screenFrames: screenFrameProvider()
@@ -134,6 +149,13 @@ public final class WorkspaceObserver {
         }
     }
 
+    public static func isCurrentProcessFrontmost(
+        frontmostProcessIdentifier: Int32?,
+        currentProcessIdentifier: Int32
+    ) -> Bool {
+        frontmostProcessIdentifier == currentProcessIdentifier
+    }
+
     /// Window-server frame values can differ from display frames by a fraction
     /// of a point; larger differences are ordinary or spanning windows.
     private static func framesMatchWithinTolerance(_ lhs: CGRect, _ rhs: CGRect) -> Bool {
@@ -153,8 +175,9 @@ public final class WorkspaceObserver {
             return nil
         }
 
-        let processIdentifier = frontmostProcess.processIdentifier
         let currentProcessIdentifier = ProcessInfo.processInfo.processIdentifier
+        let processIdentifier = frontmostProcess.processIdentifier
+        guard processIdentifier != currentProcessIdentifier else { return nil }
         var windows: [WorkspaceWindow] = []
 
         for info in windowInfo {
@@ -174,5 +197,15 @@ public final class WorkspaceObserver {
         }
 
         return windows
+    }
+
+    /// `CGWindowListCopyWindowInfo` reports Core Graphics coordinates, so this
+    /// deliberately supplies CGDisplayBounds rather than AppKit screen frames.
+    private static func coreGraphicsDisplayBounds() -> [CGRect] {
+        NSScreen.screens.compactMap { screen in
+            let key = NSDeviceDescriptionKey("NSScreenNumber")
+            guard let number = screen.deviceDescription[key] as? NSNumber else { return nil }
+            return CGDisplayBounds(CGDirectDisplayID(number.uint32Value))
+        }
     }
 }

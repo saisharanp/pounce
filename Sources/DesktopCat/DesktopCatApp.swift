@@ -2,25 +2,28 @@ import AppKit
 import DesktopCatCore
 import SwiftUI
 
+@MainActor
+final class DesktopCatApplicationDelegate: NSObject, NSApplicationDelegate {
+    let coordinator = AppCoordinator()
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        coordinator.start()
+    }
+}
+
 @main
 @MainActor
 struct DesktopCatApp: App {
-    @StateObject private var coordinator: AppCoordinator
-
-    init() {
-        _coordinator = StateObject(wrappedValue: AppCoordinator())
-    }
+    @NSApplicationDelegateAdaptor(DesktopCatApplicationDelegate.self) private var applicationDelegate
 
     var body: some Scene {
         MenuBarExtra("Desktop Cat", systemImage: "cat.fill") {
-            MenuBarContent(controller: coordinator.menuController)
-                .onAppear { coordinator.start() }
+            MenuBarContent(controller: applicationDelegate.coordinator.menuController)
         }
         .menuBarExtraStyle(.window)
 
         Settings {
-            SettingsView(controller: coordinator.menuController)
-                .onAppear { coordinator.start() }
+            SettingsView(controller: applicationDelegate.coordinator.menuController)
         }
     }
 }

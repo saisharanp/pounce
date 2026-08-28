@@ -39,6 +39,8 @@ public final class MenuBarController: ObservableObject {
     private var onSetWindowLevel: (PetWindowLevel) -> Void
     private var onSetHideInFullscreen: (Bool) -> Void
     private var onSetPaused: (Bool) -> Void
+    private var onSetAttentionLevel: (AttentionLevel) -> Void
+    private var onDirectReaction: () -> Void
     private var onOpenSettings: () -> Void
 
     public init(
@@ -50,6 +52,8 @@ public final class MenuBarController: ObservableObject {
         onSetWindowLevel: @escaping (PetWindowLevel) -> Void = { _ in },
         onSetHideInFullscreen: @escaping (Bool) -> Void = { _ in },
         onSetPaused: @escaping (Bool) -> Void = { _ in },
+        onSetAttentionLevel: @escaping (AttentionLevel) -> Void = { _ in },
+        onDirectReaction: @escaping () -> Void = {},
         onOpenSettings: @escaping () -> Void = {}
     ) {
         self.viewModel = viewModel
@@ -60,6 +64,8 @@ public final class MenuBarController: ObservableObject {
         self.onSetWindowLevel = onSetWindowLevel
         self.onSetHideInFullscreen = onSetHideInFullscreen
         self.onSetPaused = onSetPaused
+        self.onSetAttentionLevel = onSetAttentionLevel
+        self.onDirectReaction = onDirectReaction
         self.onOpenSettings = onOpenSettings
     }
 
@@ -111,6 +117,7 @@ public final class MenuBarController: ObservableObject {
 
     public func setAttentionLevel(_ level: AttentionLevel) {
         viewModel.updateState { $0.attentionLevel = level }
+        onSetAttentionLevel(level)
     }
 
     public func setHideInFullscreen(_ enabled: Bool) {
@@ -146,11 +153,13 @@ public final class MenuBarController: ObservableObject {
         guard let toy = viewModel.selectedToy,
               let reaction = viewModel.completeSelectedToy() else { return }
         playSound(for: toy.interaction, reaction: reaction)
+        onDirectReaction()
     }
 
     public func handle(_ interaction: CatInteraction) {
         let reaction = viewModel.handle(interaction)
         playSound(for: interaction, reaction: reaction)
+        onDirectReaction()
     }
 
     public func openSettings() {
