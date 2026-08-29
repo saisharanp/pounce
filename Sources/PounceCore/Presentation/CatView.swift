@@ -390,6 +390,7 @@ public struct CatView: View {
             .onChanged { value in
                 if dragStartedAt == nil {
                     dragStartedAt = Date()
+                    controller.setDragging(true)
                 }
                 let delta = CGSize(
                     width: value.translation.width - lastTranslation.width,
@@ -414,6 +415,7 @@ public struct CatView: View {
                 )
                 dragStartedAt = nil
                 lastTranslation = .zero
+                controller.setDragging(false)
                 controller.handle(interaction)
             }
     }

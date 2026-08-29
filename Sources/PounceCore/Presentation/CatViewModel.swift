@@ -102,4 +102,16 @@ public final class CatViewModel: ObservableObject {
         recentIdleActivities.append(activity)
         recentIdleActivities = Array(recentIdleActivities.suffix(2))
     }
+
+    public func setWalkingAnimation(_ walking: Bool) {
+        guard !state.reducedMotion else { return }
+        if walking {
+            activity = .walking
+            expression = .neutral
+            reactionNonce &+= 1
+        } else if activity == .walking {
+            activity = .sitting
+            expression = .neutral
+        }
+    }
 }

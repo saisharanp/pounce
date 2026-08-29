@@ -32,7 +32,9 @@ Pounce is available across Spaces, can be dragged directly by clicking and
 dragging the cat, and reacts to clicks, double-clicks, scrolling, secondary
 clicks, and repeated contact. It roams within the visible frame when idle and
 pauses movement while hidden, paused, reduced-motion, or another app is truly
-fullscreen.
+fullscreen. Roaming and dragging use continuous walking motion, while every
+interaction drives a bounded pose/expression animation; Reduced Motion keeps
+the state changes without animated movement.
 
 ## Desktop cleanup and screen time
 

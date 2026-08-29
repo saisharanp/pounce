@@ -1275,6 +1275,15 @@ private let checks = [
         guard candidates.map(\.name) == ["notes.txt"] else {
             throw CheckFailure(description: "cleanup preview returned " + candidates.map(\.name).joined(separator: ","))
         }
+    },
+    CheckCase(name: "roamingPathInterpolatesAndClampsProgress") {
+        let start = CGPoint(x: 10, y: 20)
+        let end = CGPoint(x: 110, y: 220)
+        guard PounceMotionPath.point(from: start, to: end, progress: 0.5) == CGPoint(x: 60, y: 120),
+              PounceMotionPath.point(from: start, to: end, progress: -1) == start,
+              PounceMotionPath.point(from: start, to: end, progress: 2) == end else {
+            throw CheckFailure(description: "roaming path did not interpolate or clamp progress")
+        }
     }
 ]
 

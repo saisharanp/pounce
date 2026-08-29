@@ -49,6 +49,7 @@ public final class MenuBarController: ObservableObject {
     private var onSetHideInFullscreen: (Bool) -> Void
     private var onSetPaused: (Bool) -> Void
     private var onMoveWindow: (CGSize) -> Void
+    private var onDragStateChanged: (Bool) -> Void
     private var onSetAttentionLevel: (AttentionLevel) -> Void
     private var onDirectReaction: () -> Void
     private var onOpenSettings: () -> Void
@@ -63,6 +64,7 @@ public final class MenuBarController: ObservableObject {
         onSetHideInFullscreen: @escaping (Bool) -> Void = { _ in },
         onSetPaused: @escaping (Bool) -> Void = { _ in },
         onMoveWindow: @escaping (CGSize) -> Void = { _ in },
+        onDragStateChanged: @escaping (Bool) -> Void = { _ in },
         onSetAttentionLevel: @escaping (AttentionLevel) -> Void = { _ in },
         onDirectReaction: @escaping () -> Void = {},
         onOpenSettings: @escaping () -> Void = {},
@@ -79,6 +81,7 @@ public final class MenuBarController: ObservableObject {
         self.onSetHideInFullscreen = onSetHideInFullscreen
         self.onSetPaused = onSetPaused
         self.onMoveWindow = onMoveWindow
+        self.onDragStateChanged = onDragStateChanged
         self.onSetAttentionLevel = onSetAttentionLevel
         self.onDirectReaction = onDirectReaction
         self.onOpenSettings = onOpenSettings
@@ -245,6 +248,10 @@ public final class MenuBarController: ObservableObject {
         onMoveWindow(delta)
     }
 
+    public func setDragging(_ enabled: Bool) {
+        onDragStateChanged(enabled)
+    }
+
     public func setScreenTimeEnabled(_ enabled: Bool) {
         viewModel.updateState { $0.screenTimeEnabled = enabled }
         if !enabled, isScreenTimeActive { toggleScreenTime() }
@@ -258,6 +265,7 @@ public final class MenuBarController: ObservableObject {
             windowController?.setHideInFullscreen($0)
         }
         onMoveWindow = { [weak windowController] in windowController?.moveWindow(by: $0) }
+        onDragStateChanged = { [weak windowController] in windowController?.setDraggingAnimation($0) }
     }
 
     private func setVisible(_ visible: Bool) {

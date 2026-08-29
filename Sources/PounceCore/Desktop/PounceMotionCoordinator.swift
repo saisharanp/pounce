@@ -1,6 +1,16 @@
 import AppKit
 import Foundation
 
+public enum PounceMotionPath {
+    public static func point(from start: CGPoint, to end: CGPoint, progress: Double) -> CGPoint {
+        let t = min(max(progress, 0), 1)
+        return CGPoint(
+            x: start.x + (end.x - start.x) * t,
+            y: start.y + (end.y - start.y) * t
+        )
+    }
+}
+
 /// Drives gentle autonomous movement while the panel is eligible to be shown.
 /// All inputs are injectable so the scheduler is deterministic in checks.
 @MainActor
@@ -14,9 +24,11 @@ public final class PounceMotionCoordinator {
     private let visibleFrameProvider: VisibleFrameProvider
     private let destinationProvider: DestinationProvider
     private let interval: Duration
+    private let travelDuration: TimeInterval
 
     public init(
         interval: Duration = .seconds(18),
+        travelDuration: TimeInterval = 2.4,
         eligibility: @escaping Eligibility = { true },
         visibleFrameProvider: @escaping VisibleFrameProvider = {
             NSScreen.main?.visibleFrame
@@ -31,6 +43,7 @@ public final class PounceMotionCoordinator {
         }
     ) {
         self.interval = interval
+        self.travelDuration = max(0.1, travelDuration)
         self.eligibility = eligibility
         self.visibleFrameProvider = visibleFrameProvider
         self.destinationProvider = destinationProvider
@@ -42,6 +55,7 @@ public final class PounceMotionCoordinator {
         let eligibility = self.eligibility
         let visibleFrameProvider = self.visibleFrameProvider
         let destinationProvider = self.destinationProvider
+        let travelDuration = self.travelDuration
         task = Task { [weak windowController] in
             while !Task.isCancelled {
                 do {
@@ -57,7 +71,11 @@ public final class PounceMotionCoordinator {
                     continue
                 }
                 let destination = destinationProvider(frame, window.frame.size)
-                windowController.moveToPoint(destination, visibleFrame: frame)
+                windowController.animateToPoint(
+                    destination,
+                    visibleFrame: frame,
+                    duration: travelDuration
+                )
             }
         }
     }

@@ -19,6 +19,7 @@ public struct PounceDisplay: Equatable {
 @MainActor
 public final class PounceWindowController: NSWindowController {
     private let workspaceObserver: WorkspaceObserver
+    private let viewModel: CatViewModel
     private var screenParametersObserver: NSObjectProtocol?
     private var windowMoveObserver: NSObjectProtocol?
     private var requestedVisibility = true
@@ -64,6 +65,7 @@ public final class PounceWindowController: NSWindowController {
         )
 
         self.workspaceObserver = workspaceObserver
+        self.viewModel = resolvedViewModel
         super.init(window: panel)
 
         hidesInFullscreen = state.hideInFullscreen
@@ -168,6 +170,25 @@ public final class PounceWindowController: NSWindowController {
             Self.clampedOrigin(point, windowSize: window.frame.size, visibleFrame: visibleFrame)
         )
         persistWindowOrigin()
+    }
+
+    public func animateToPoint(_ point: CGPoint, visibleFrame: CGRect, duration: TimeInterval) {
+        guard let window else { return }
+        let destination = Self.clampedOrigin(point, windowSize: window.frame.size, visibleFrame: visibleFrame)
+        viewModel.setWalkingAnimation(true)
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = max(0.1, duration)
+            context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            window.animator().setFrameOrigin(destination)
+        } completionHandler: { [weak self] in
+            Task { @MainActor [weak self] in
+                self?.viewModel.setWalkingAnimation(false)
+            }
+        }
+    }
+
+    public func setDraggingAnimation(_ enabled: Bool) {
+        viewModel.setWalkingAnimation(enabled)
     }
 
     public static func clampedOrigin(
