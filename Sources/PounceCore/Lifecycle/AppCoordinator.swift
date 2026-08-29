@@ -38,6 +38,9 @@ public final class AppCoordinator: ObservableObject {
             onMoveWindow: { [weak self] delta in
                 self?.windowController?.moveWindow(by: delta)
             },
+            onDragStateChanged: { [weak self] enabled in
+                self?.windowController?.setDraggingAnimation(enabled)
+            },
             onSetAttentionLevel: { [weak self] _ in
                 self?.updateIdleWork()
             },
