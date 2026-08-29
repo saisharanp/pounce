@@ -5,6 +5,7 @@ import Foundation
 public final class CatViewModel: ObservableObject {
     @Published public private(set) var activity: CatActivity = .sitting
     @Published public private(set) var expression: CatExpression = .neutral
+    @Published public private(set) var facing: CGFloat = 1
     @Published public private(set) var reactionNonce: UInt64 = 0
     @Published public private(set) var state: PetState
     @Published public private(set) var selectedToy: CatToy?
@@ -104,13 +105,20 @@ public final class CatViewModel: ObservableObject {
     }
 
     public func setWalkingAnimation(_ walking: Bool) {
+        setLocomotion(walking ? .walking : nil)
+    }
+
+    public func setLocomotion(_ activity: CatActivity?, facing: CGFloat? = nil) {
+        if let facing {
+            self.facing = facing < 0 ? -1 : 1
+        }
         guard !state.reducedMotion else { return }
-        if walking {
-            activity = .walking
+        if let activity {
+            self.activity = activity
             expression = .neutral
             reactionNonce &+= 1
-        } else if activity == .walking {
-            activity = .sitting
+        } else if self.activity == .walking || self.activity == .zooming || self.activity == .pouncing {
+            self.activity = .sitting
             expression = .neutral
         }
     }

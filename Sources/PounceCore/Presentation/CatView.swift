@@ -38,7 +38,7 @@ public struct CatAnimationTiming: Hashable, Sendable {
         closingMilliseconds + closedHoldMilliseconds + openingMilliseconds
     }
 
-    public init(expression: CatExpression) {
+    public init(expression: CatExpression, activity: CatActivity = .sitting) {
         switch expression {
         case .blink:
             closingMilliseconds = 120
@@ -49,9 +49,33 @@ public struct CatAnimationTiming: Hashable, Sendable {
             closedHoldMilliseconds = 260
             openingMilliseconds = 480
         default:
-            closingMilliseconds = 240
-            closedHoldMilliseconds = 60
-            openingMilliseconds = 320
+            switch activity {
+            case .walking:
+                closingMilliseconds = 140
+                closedHoldMilliseconds = 40
+                openingMilliseconds = 140
+            case .zooming:
+                closingMilliseconds = 90
+                closedHoldMilliseconds = 30
+                openingMilliseconds = 90
+            case .pouncing:
+                closingMilliseconds = 110
+                closedHoldMilliseconds = 40
+                openingMilliseconds = 160
+            default:
+                closingMilliseconds = 240
+                closedHoldMilliseconds = 60
+                openingMilliseconds = 320
+            }
+        }
+    }
+
+    public static func loops(for activity: CatActivity) -> Bool {
+        switch activity {
+        case .walking, .zooming, .pouncing, .kneading, .grooming:
+            true
+        default:
+            false
         }
     }
 }
@@ -344,6 +368,7 @@ public struct CatView: View {
                 highContrast: viewModel.state.highContrast
             )
             .frame(width: 132, height: 132)
+            .scaleEffect(x: viewModel.facing, y: 1)
             .contentShape(CatHitAreaShape())
             .gesture(catGesture)
             .simultaneousGesture(
@@ -423,22 +448,32 @@ public struct CatView: View {
     private func playBoundedAnimation() async {
         phase = false
         guard motionAllowed else { return }
-        let timing = CatAnimationTiming(expression: viewModel.expression)
 
-        withAnimation(.easeOut(duration: Double(timing.closingMilliseconds) / 1_000)) {
-            phase = true
-        }
-        do {
-            try await Task.sleep(
-                for: .milliseconds(timing.closingMilliseconds + timing.closedHoldMilliseconds)
+        repeat {
+            let timing = CatAnimationTiming(
+                expression: viewModel.expression,
+                activity: viewModel.activity
             )
-        } catch {
-            return
-        }
-        guard !Task.isCancelled else { return }
-        withAnimation(.easeInOut(duration: Double(timing.openingMilliseconds) / 1_000)) {
-            phase = false
-        }
+            withAnimation(.easeInOut(duration: Double(timing.closingMilliseconds) / 1_000)) {
+                phase = true
+            }
+            do {
+                try await Task.sleep(
+                    for: .milliseconds(timing.closingMilliseconds + timing.closedHoldMilliseconds)
+                )
+            } catch {
+                return
+            }
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeInOut(duration: Double(timing.openingMilliseconds) / 1_000)) {
+                phase = false
+            }
+            do {
+                try await Task.sleep(for: .milliseconds(timing.openingMilliseconds))
+            } catch {
+                return
+            }
+        } while CatAnimationTiming.loops(for: viewModel.activity) && motionAllowed && !Task.isCancelled
     }
 }
 

@@ -102,6 +102,9 @@ public final class AppCoordinator: ObservableObject {
         )
         self.windowController = windowController
         let motionCoordinator = PounceMotionCoordinator(
+            interval: { [weak self] in
+                Self.roamInterval(for: self?.viewModel.state.attentionLevel ?? .balanced)
+            },
             eligibility: { [weak self, weak windowController] in
                 guard let self, let windowController else { return false }
                 return viewModel.state.roamingEnabled
@@ -115,6 +118,19 @@ public final class AppCoordinator: ObservableObject {
             visibleFrameProvider: { [weak windowController] in
                 guard let window = windowController?.window else { return NSScreen.main?.visibleFrame }
                 return window.screen?.visibleFrame ?? NSScreen.main?.visibleFrame
+            },
+            planProvider: { [weak self] origin, frame, size in
+                CatRoam.plan(
+                    from: origin,
+                    windowSize: size,
+                    visibleFrame: frame,
+                    gait: CatRoam.pickGait(
+                        unit: .random(in: 0..<1),
+                        personality: self?.viewModel.state.personality ?? .playfulKitten
+                    ),
+                    angle: .random(in: 0..<(2 * .pi)),
+                    distanceUnit: .random(in: 0...1)
+                )
             }
         )
         self.motionCoordinator = motionCoordinator
@@ -168,6 +184,14 @@ public final class AppCoordinator: ObservableObject {
         case .calm: 20...35
         case .balanced: 10...20
         case .lively: 5...12
+        }
+    }
+
+    public static func roamInterval(for attentionLevel: AttentionLevel) -> ClosedRange<Int> {
+        switch attentionLevel {
+        case .calm: 8...14
+        case .balanced: 4...8
+        case .lively: 2...5
         }
     }
 

@@ -1284,6 +1284,133 @@ private let checks = [
               PounceMotionPath.point(from: start, to: end, progress: 2) == end else {
             throw CheckFailure(description: "roaming path did not interpolate or clamp progress")
         }
+    },
+    CheckCase(name: "roamStrollStaysNearbyAndClamped") {
+        let origin = CGPoint(x: 400, y: 400)
+        let frame = CGRect(x: 0, y: 0, width: 1_440, height: 900)
+        let size = CGSize(width: 180, height: 180)
+        guard let plan = CatRoam.plan(
+            from: origin,
+            windowSize: size,
+            visibleFrame: frame,
+            gait: .stroll,
+            angle: 0,
+            distanceUnit: 1
+        ) else {
+            throw CheckFailure(description: "stroll roam produced no plan")
+        }
+        let distance = hypot(plan.destination.x - origin.x, plan.destination.y - origin.y)
+        let maxX = frame.maxX - size.width
+        guard plan.gait == .stroll,
+              plan.activity == .walking,
+              distance >= 90, distance <= 240,
+              plan.destination.x <= maxX,
+              plan.destination.y >= frame.minY,
+              plan.destination.y <= frame.maxY - size.height else {
+            throw CheckFailure(description: "stroll did not stay nearby or inside the visible frame")
+        }
+    },
+    CheckCase(name: "roamZoomTravelsFartherThanStroll") {
+        let origin = CGPoint(x: 200, y: 200)
+        let frame = CGRect(x: 0, y: 0, width: 1_440, height: 900)
+        let size = CGSize(width: 180, height: 180)
+        guard let stroll = CatRoam.plan(
+            from: origin, windowSize: size, visibleFrame: frame,
+            gait: .stroll, angle: 0.35, distanceUnit: 1
+        ), let zoom = CatRoam.plan(
+            from: origin, windowSize: size, visibleFrame: frame,
+            gait: .zoom, angle: 0.35, distanceUnit: 1
+        ) else {
+            throw CheckFailure(description: "expected both stroll and zoom plans")
+        }
+        let strollDistance = hypot(stroll.destination.x - origin.x, stroll.destination.y - origin.y)
+        let zoomDistance = hypot(zoom.destination.x - origin.x, zoom.destination.y - origin.y)
+        guard zoom.activity == .zooming, zoomDistance > strollDistance * 1.4 else {
+            throw CheckFailure(description: "zoom gait did not cover more ground than a stroll")
+        }
+    },
+    CheckCase(name: "roamDurationMatchesGaitAndDistance") {
+        let shortStroll = CatRoam.duration(distance: 100, gait: .stroll)
+        let longStroll = CatRoam.duration(distance: 220, gait: .stroll)
+        let zoom = CatRoam.duration(distance: 220, gait: .zoom)
+        let pounce = CatRoam.duration(distance: 80, gait: .pounce)
+        guard longStroll > shortStroll,
+              zoom < longStroll,
+              pounce < 0.8,
+              shortStroll >= 0.55, longStroll <= 2.4 else {
+            throw CheckFailure(description: "roam duration did not scale with distance or gait")
+        }
+    },
+    CheckCase(name: "roamEaseStartsAndStopsSlowly") {
+        guard PounceMotionPath.easedProgress(0) == 0,
+              PounceMotionPath.easedProgress(1) == 1,
+              abs(PounceMotionPath.easedProgress(0.5) - 0.5) < 0.001,
+              PounceMotionPath.easedProgress(0.25) < 0.25,
+              PounceMotionPath.easedProgress(0.75) > 0.75 else {
+            throw CheckFailure(description: "roam easing was not slow-in and slow-out")
+        }
+    },
+    CheckCase(name: "roamHopPeaksMidTravel") {
+        let mid = PounceMotionPath.hopOffset(progress: 0.5, height: 24)
+        let start = PounceMotionPath.hopOffset(progress: 0, height: 24)
+        let end = PounceMotionPath.hopOffset(progress: 1, height: 24)
+        guard start == 0, end == 0, abs(mid - 24) < 0.001 else {
+            throw CheckFailure(description: "pounce hop did not peak at mid-travel")
+        }
+    },
+    CheckCase(name: "roamRestAndOffscreenMovesProduceNoPlan") {
+        let origin = CGPoint(x: 0, y: 0)
+        let frame = CGRect(x: 0, y: 0, width: 1_440, height: 900)
+        let size = CGSize(width: 180, height: 180)
+        let rest = CatRoam.plan(
+            from: origin, windowSize: size, visibleFrame: frame,
+            gait: .rest, angle: 0, distanceUnit: 1
+        )
+        let offscreen = CatRoam.plan(
+            from: origin, windowSize: size, visibleFrame: frame,
+            gait: .stroll, angle: .pi, distanceUnit: 1
+        )
+        guard rest == nil, offscreen == nil else {
+            throw CheckFailure(description: "rest or fully clamped roam still produced a destination")
+        }
+    },
+    CheckCase(name: "playfulKittenRoamsMoreThanSleepyLoaf") {
+        let units = stride(from: 0.0, to: 1.0, by: 0.01).map { $0 }
+        let kittenRest = units.filter { CatRoam.pickGait(unit: $0, personality: .playfulKitten) == .rest }.count
+        let loafRest = units.filter { CatRoam.pickGait(unit: $0, personality: .sleepyLoaf) == .rest }.count
+        let kittenZoom = units.filter { CatRoam.pickGait(unit: $0, personality: .playfulKitten) == .zoom }.count
+        guard kittenRest < loafRest, kittenZoom > 10 else {
+            throw CheckFailure(description: "playful kitten did not roam more than sleepy loaf")
+        }
+    },
+    CheckCase(name: "attentionLevelsUseShorterRoamIntervals") {
+        guard AppCoordinator.roamInterval(for: .calm) == 8...14,
+              AppCoordinator.roamInterval(for: .balanced) == 4...8,
+              AppCoordinator.roamInterval(for: .lively) == 2...5 else {
+            throw CheckFailure(description: "roam intervals were not shorter, attention-scaled waits")
+        }
+    },
+    CheckCase(name: "locomotionActivitiesLoopWhileStationaryDoNot") {
+        guard CatAnimationTiming.loops(for: .walking),
+              CatAnimationTiming.loops(for: .zooming),
+              CatAnimationTiming.loops(for: .pouncing),
+              CatAnimationTiming.loops(for: .kneading),
+              !CatAnimationTiming.loops(for: .sitting),
+              !CatAnimationTiming.loops(for: .sleeping) else {
+            throw CheckFailure(description: "walk and zoom poses did not loop, or idle poses looped")
+        }
+    },
+    CheckCase(name: "viewModelLocomotionFacesTravelDirection") {
+        let defaults = UserDefaults(suiteName: "PounceChecks-\(UUID().uuidString)")!
+        let model = CatViewModel(store: PetStateStore(defaults: defaults))
+        model.setLocomotion(.zooming, facing: -1)
+        guard model.activity == .zooming, model.facing == -1 else {
+            throw CheckFailure(description: "locomotion did not face the travel direction")
+        }
+        model.setLocomotion(nil)
+        guard model.activity == .sitting, model.facing == -1 else {
+            throw CheckFailure(description: "ending locomotion did not settle while keeping facing")
+        }
     }
 ]
 

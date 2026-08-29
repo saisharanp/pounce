@@ -29,6 +29,7 @@ public final class PounceWindowController: NSWindowController {
     public var onFullscreenStateChanged: ((Bool) -> Void)?
     public var onWindowOriginChanged: ((ScreenRelativePoint, String?) -> Void)?
     private var hidesInFullscreen = true
+    private var roamTask: Task<Void, Never>?
 
     public init(
         state: PetState,
@@ -108,6 +109,7 @@ public final class PounceWindowController: NSWindowController {
 
     deinit {
         MainActor.assumeIsolated {
+            roamTask?.cancel()
             if let screenParametersObserver {
                 NotificationCenter.default.removeObserver(screenParametersObserver)
             }
@@ -172,19 +174,40 @@ public final class PounceWindowController: NSWindowController {
         persistWindowOrigin()
     }
 
-    public func animateToPoint(_ point: CGPoint, visibleFrame: CGRect, duration: TimeInterval) {
+    public func animateToPoint(
+        _ point: CGPoint,
+        visibleFrame: CGRect,
+        duration: TimeInterval,
+        activity: CatActivity = .walking,
+        hopHeight: CGFloat = 6
+    ) async {
         guard let window else { return }
+        roamTask?.cancel()
         let destination = Self.clampedOrigin(point, windowSize: window.frame.size, visibleFrame: visibleFrame)
-        viewModel.setWalkingAnimation(true)
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = max(0.1, duration)
-            context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-            window.animator().setFrameOrigin(destination)
-        } completionHandler: { [weak self] in
-            Task { @MainActor [weak self] in
-                self?.viewModel.setWalkingAnimation(false)
+        let start = window.frame.origin
+        let facing: CGFloat = destination.x < start.x ? -1 : 1
+        viewModel.setLocomotion(activity, facing: facing)
+        let travel = max(0.1, duration)
+        let motion = Task { [weak self, weak window] in
+            let started = Date()
+            while !Task.isCancelled {
+                let progress = min(1, Date().timeIntervalSince(started) / travel)
+                let eased = PounceMotionPath.easedProgress(progress)
+                var origin = PounceMotionPath.point(from: start, to: destination, progress: eased)
+                origin.y += PounceMotionPath.hopOffset(progress: progress, height: hopHeight)
+                if let window {
+                    window.setFrameOrigin(
+                        Self.clampedOrigin(origin, windowSize: window.frame.size, visibleFrame: visibleFrame)
+                    )
+                }
+                if progress >= 1 { break }
+                try? await Task.sleep(for: .milliseconds(16))
             }
+            guard !Task.isCancelled else { return }
+            self?.viewModel.setLocomotion(nil)
         }
+        roamTask = motion
+        await motion.value
     }
 
     public func setDraggingAnimation(_ enabled: Bool) {
