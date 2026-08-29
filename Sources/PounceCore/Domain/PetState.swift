@@ -43,6 +43,11 @@ public struct PetState: Codable, Equatable {
     public var soundVolume: Double
     public var hideInFullscreen: Bool
     public var attentionLevel: AttentionLevel
+    public var roamingEnabled: Bool
+    public var screenTimeEnabled: Bool
+    public var focusSessionMinutes: Int
+    public var breakIntervalMinutes: Int
+    public var screenTimeSessions: [ScreenTimeSession]
 
     public init(
         personality: CatPersonality = .playfulKitten,
@@ -59,7 +64,12 @@ public struct PetState: Codable, Equatable {
         windowLevel: PetWindowLevel = .desktop,
         soundVolume: Double = 0.65,
         hideInFullscreen: Bool = true,
-        attentionLevel: AttentionLevel = .balanced
+        attentionLevel: AttentionLevel = .balanced,
+        roamingEnabled: Bool = true,
+        screenTimeEnabled: Bool = false,
+        focusSessionMinutes: Int = 25,
+        breakIntervalMinutes: Int = 45,
+        screenTimeSessions: [ScreenTimeSession] = []
     ) {
         self.personality = personality
         self.mood = mood
@@ -76,6 +86,11 @@ public struct PetState: Codable, Equatable {
         self.soundVolume = Self.clampedVolume(soundVolume)
         self.hideInFullscreen = hideInFullscreen
         self.attentionLevel = attentionLevel
+        self.roamingEnabled = roamingEnabled
+        self.screenTimeEnabled = screenTimeEnabled
+        self.focusSessionMinutes = Self.clampedMinutes(focusSessionMinutes, defaultValue: 25)
+        self.breakIntervalMinutes = Self.clampedMinutes(breakIntervalMinutes, defaultValue: 45)
+        self.screenTimeSessions = screenTimeSessions
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -94,6 +109,11 @@ public struct PetState: Codable, Equatable {
         case soundVolume
         case hideInFullscreen
         case attentionLevel
+        case roamingEnabled
+        case screenTimeEnabled
+        case focusSessionMinutes
+        case breakIntervalMinutes
+        case screenTimeSessions
     }
 
     public init(from decoder: Decoder) throws {
@@ -117,10 +137,26 @@ public struct PetState: Codable, Equatable {
             (try? container.decodeIfPresent(Bool.self, forKey: .hideInFullscreen)) ?? true
         attentionLevel =
             (try? container.decodeIfPresent(AttentionLevel.self, forKey: .attentionLevel)) ?? .balanced
+        roamingEnabled = try container.decodeIfPresent(Bool.self, forKey: .roamingEnabled) ?? true
+        screenTimeEnabled = try container.decodeIfPresent(Bool.self, forKey: .screenTimeEnabled) ?? false
+        focusSessionMinutes = Self.clampedMinutes(
+            (try? container.decodeIfPresent(Int.self, forKey: .focusSessionMinutes)) ?? 25,
+            defaultValue: 25
+        )
+        breakIntervalMinutes = Self.clampedMinutes(
+            (try? container.decodeIfPresent(Int.self, forKey: .breakIntervalMinutes)) ?? 45,
+            defaultValue: 45
+        )
+        screenTimeSessions = (try? container.decodeIfPresent([ScreenTimeSession].self, forKey: .screenTimeSessions)) ?? []
     }
 
     public static func clampedVolume(_ volume: Double) -> Double {
         guard volume.isFinite else { return 0.65 }
         return min(max(volume, 0), 1)
+    }
+
+    public static func clampedMinutes(_ minutes: Int, defaultValue: Int) -> Int {
+        guard minutes > 0 else { return defaultValue }
+        return min(max(minutes, 1), 240)
     }
 }

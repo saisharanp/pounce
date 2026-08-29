@@ -1215,6 +1215,66 @@ private let checks = [
         guard !observer.isFullscreenAppActive else {
             throw CheckFailure(description: "hiding the fullscreen application did not refresh workspace state")
         }
+    },
+    CheckCase(name: "extendedPointerInteractionsResolveDistinctReactions") {
+        let mood = CatMood()
+        let expected: [(CatInteraction, CatReaction)] = [
+            (.doubleClick, CatReaction(activity: .pouncing, expression: .chirp)),
+            (.scrollUp, CatReaction(activity: .lookingAround, expression: .chirp)),
+            (.scrollDown, CatReaction(activity: .loafing, expression: .slowBlink)),
+            (.secondaryClick, CatReaction(activity: .sitting, expression: .sideEye))
+        ]
+        for (interaction, reaction) in expected {
+            guard CatReactionResolver.resolve(interaction, mood: mood) == reaction else {
+                throw CheckFailure(description: "interaction (interaction) resolved to the wrong reaction")
+            }
+        }
+    },
+    CheckCase(name: "screenTimeCalculatorClipsAndPromptsSessions") {
+        let start = Date(timeIntervalSince1970: 1_000)
+        let now = Date(timeIntervalSince1970: 2_000)
+        let sessions = [
+            ScreenTimeSession(startedAt: Date(timeIntervalSince1970: 900), endedAt: Date(timeIntervalSince1970: 1_100)),
+            ScreenTimeSession(startedAt: Date(timeIntervalSince1970: 1_500), endedAt: nil)
+        ]
+        let summary = ScreenTimeCalculator.summary(sessions: sessions, from: start, until: now)
+        guard summary.sessionCount == 2, summary.totalSeconds == 600 else {
+            throw CheckFailure(description: "screen-time summary did not clip sessions to its requested window")
+        }
+        guard ScreenTimeCalculator.shouldPromptBreak(
+            sessionStartedAt: start,
+            now: Date(timeIntervalSince1970: 2_600),
+            intervalMinutes: 25,
+            isPaused: false
+        ) else {
+            throw CheckFailure(description: "break reminder did not trigger after the configured interval")
+        }
+    },
+    CheckCase(name: "desktopCleanupPreviewExcludesUnsafeEntries") {
+        struct FixtureFileSystem: DesktopFileSystem {
+            let root: URL
+            let files: [URL: (directory: Bool, symlink: Bool, size: Int64)]
+            func contentsOfDirectory(at url: URL) throws -> [URL] { Array(files.keys) }
+            func byteCount(for url: URL) throws -> Int64 { files[url]?.size ?? 0 }
+            func isDirectory(_ url: URL) throws -> Bool { files[url]?.directory ?? false }
+            func isSymbolicLink(_ url: URL) throws -> Bool { files[url]?.symlink ?? false }
+            func moveToTrash(_ url: URL) throws {}
+        }
+        let desktop = URL(fileURLWithPath: "/tmp/pounce-desktop")
+        let safe = desktop.appendingPathComponent("notes.txt")
+        let hidden = desktop.appendingPathComponent(".secret")
+        let folder = desktop.appendingPathComponent("Folder")
+        let link = desktop.appendingPathComponent("link.txt")
+        let fileSystem = FixtureFileSystem(
+            root: desktop,
+            files: [safe: (false, false, 12), hidden: (false, false, 2), folder: (true, false, 0), link: (false, true, 1)]
+        )
+        guard case let .success(candidates) = DesktopCleanupService(fileSystem: fileSystem).preview(desktopURL: desktop) else {
+            throw CheckFailure(description: "cleanup preview failed to enumerate fixture")
+        }
+        guard candidates.map(\.name) == ["notes.txt"] else {
+            throw CheckFailure(description: "cleanup preview returned " + candidates.map(\.name).joined(separator: ","))
+        }
     }
 ]
 

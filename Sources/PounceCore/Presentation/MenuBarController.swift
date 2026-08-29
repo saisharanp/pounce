@@ -30,15 +30,25 @@ public enum PounceKeyboardAction: String, CaseIterable, Sendable {
 @MainActor
 public final class MenuBarController: ObservableObject {
     @Published public private(set) var isVisible: Bool
+    @Published public private(set) var cleanupCandidates: [DesktopCleanupCandidate] = []
+    @Published public var isCleanupPresented = false
+    @Published public var isScreenTimePresented = false
+    @Published public private(set) var cleanupError: String?
+    @Published public private(set) var isScreenTimeActive = false
 
     public let viewModel: CatViewModel
 
     private let soundController: CatSoundController
+    private let cleanupService: DesktopCleanupService
+    private let clock: () -> Date
+    private let reminderScheduler: ScreenTimeReminderScheduling
+    private var screenTimeStartedAt: Date?
     private var onSetVisibility: (Bool) -> Void
     private var onSetClickThrough: (Bool) -> Void
     private var onSetWindowLevel: (PetWindowLevel) -> Void
     private var onSetHideInFullscreen: (Bool) -> Void
     private var onSetPaused: (Bool) -> Void
+    private var onMoveWindow: (CGSize) -> Void
     private var onSetAttentionLevel: (AttentionLevel) -> Void
     private var onDirectReaction: () -> Void
     private var onOpenSettings: () -> Void
@@ -52,9 +62,13 @@ public final class MenuBarController: ObservableObject {
         onSetWindowLevel: @escaping (PetWindowLevel) -> Void = { _ in },
         onSetHideInFullscreen: @escaping (Bool) -> Void = { _ in },
         onSetPaused: @escaping (Bool) -> Void = { _ in },
+        onMoveWindow: @escaping (CGSize) -> Void = { _ in },
         onSetAttentionLevel: @escaping (AttentionLevel) -> Void = { _ in },
         onDirectReaction: @escaping () -> Void = {},
-        onOpenSettings: @escaping () -> Void = {}
+        onOpenSettings: @escaping () -> Void = {},
+        cleanupService: DesktopCleanupService = DesktopCleanupService(),
+        clock: @escaping () -> Date = Date.init,
+        reminderScheduler: ScreenTimeReminderScheduling = NoopScreenTimeReminderScheduler()
     ) {
         self.viewModel = viewModel
         self.soundController = soundController
@@ -64,9 +78,13 @@ public final class MenuBarController: ObservableObject {
         self.onSetWindowLevel = onSetWindowLevel
         self.onSetHideInFullscreen = onSetHideInFullscreen
         self.onSetPaused = onSetPaused
+        self.onMoveWindow = onMoveWindow
         self.onSetAttentionLevel = onSetAttentionLevel
         self.onDirectReaction = onDirectReaction
         self.onOpenSettings = onOpenSettings
+        self.cleanupService = cleanupService
+        self.clock = clock
+        self.reminderScheduler = reminderScheduler
     }
 
     public func summon() {
@@ -166,6 +184,72 @@ public final class MenuBarController: ObservableObject {
         onOpenSettings()
     }
 
+    public func openCleanup() {
+        cleanupError = nil
+        cleanupCandidates = []
+        isCleanupPresented = true
+    }
+
+    public func scanDesktop() {
+        switch cleanupService.preview() {
+        case let .success(candidates):
+            cleanupCandidates = candidates
+            cleanupError = nil
+        case let .failure(error):
+            cleanupCandidates = []
+            cleanupError = error.localizedDescription
+        }
+    }
+
+    public func moveCleanupCandidatesToTrash(_ candidates: [DesktopCleanupCandidate]) {
+        let results = cleanupService.moveToTrash(candidates)
+        let errors = results.compactMap { result -> String? in
+            if case let .failure(error) = result { return error.localizedDescription }
+            return nil
+        }
+        cleanupError = errors.isEmpty ? nil : errors.joined(separator: "\n")
+        cleanupCandidates.removeAll { candidate in
+            results.contains { result in
+                if case let .success(url) = result { return url == candidate.url }
+                return false
+            }
+        }
+    }
+
+    public func toggleScreenTime() {
+        if let startedAt = screenTimeStartedAt {
+            let session = ScreenTimeSession(startedAt: startedAt, endedAt: clock())
+            viewModel.updateState { $0.screenTimeSessions.append(session) }
+            screenTimeStartedAt = nil
+            isScreenTimeActive = false
+            reminderScheduler.cancelBreakReminder()
+        } else {
+            screenTimeStartedAt = clock()
+            isScreenTimeActive = true
+            reminderScheduler.requestAuthorization()
+            reminderScheduler.scheduleBreakReminder(
+                after: TimeInterval(viewModel.state.breakIntervalMinutes * 60)
+            )
+        }
+    }
+
+    public func clearScreenTimeHistory() {
+        viewModel.updateState { $0.screenTimeSessions.removeAll() }
+    }
+
+    public func setRoamingEnabled(_ enabled: Bool) {
+        viewModel.updateState { $0.roamingEnabled = enabled }
+    }
+
+    public func moveWindow(by delta: CGSize) {
+        onMoveWindow(delta)
+    }
+
+    public func setScreenTimeEnabled(_ enabled: Bool) {
+        viewModel.updateState { $0.screenTimeEnabled = enabled }
+        if !enabled, isScreenTimeActive { toggleScreenTime() }
+    }
+
     public func connect(windowController: PounceWindowController) {
         onSetVisibility = { [weak windowController] in windowController?.setVisible($0) }
         onSetClickThrough = { [weak windowController] in windowController?.setClickThrough($0) }
@@ -173,6 +257,7 @@ public final class MenuBarController: ObservableObject {
         onSetHideInFullscreen = { [weak windowController] in
             windowController?.setHideInFullscreen($0)
         }
+        onMoveWindow = { [weak windowController] in windowController?.moveWindow(by: $0) }
     }
 
     private func setVisible(_ visible: Bool) {
@@ -317,6 +402,11 @@ public struct MenuBarContent: View {
             CareMetersView(mood: viewModel.state.mood)
 
             HStack {
+                Button("Clean Up Desktop…", systemImage: "sparkles") { controller.openCleanup() }
+                Button("Screen Time…", systemImage: "timer") { controller.isScreenTimePresented = true }
+            }
+
+            HStack {
                 SettingsLink {
                     Label("Settings…", systemImage: "gearshape")
                 }
@@ -327,6 +417,12 @@ public struct MenuBarContent: View {
         .padding(14)
         .frame(width: 330)
         .background(.regularMaterial)
+        .sheet(isPresented: $controller.isCleanupPresented) {
+            DesktopCleanupView(controller: controller)
+        }
+        .sheet(isPresented: $controller.isScreenTimePresented) {
+            ScreenTimeView(controller: controller)
+        }
     }
 
     private var personalityBinding: Binding<CatPersonality> {

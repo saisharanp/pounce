@@ -76,7 +76,9 @@ public final class CatSoundController {
             return .chirp
         case .laser, .yarn, .paperBall:
             return .play
-        case .click, .gentlePet, .hurriedAttention:
+        case .doubleClick, .scrollUp:
+            return .chirp
+        case .scrollDown, .secondaryClick, .click, .gentlePet, .hurriedAttention:
             switch reaction.expression {
             case .purr, .slowBlink:
                 return .purr

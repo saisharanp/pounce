@@ -1,5 +1,9 @@
 public enum CatInteraction {
     case click
+    case doubleClick
+    case scrollUp
+    case scrollDown
+    case secondaryClick
     case gentlePet
     case hurriedAttention
     case laser
@@ -35,6 +39,14 @@ public enum CatReactionResolver {
         _ = mood
 
         switch input {
+        case .doubleClick:
+            return CatReaction(activity: .pouncing, expression: .chirp)
+        case .scrollUp:
+            return CatReaction(activity: .lookingAround, expression: .chirp)
+        case .scrollDown:
+            return CatReaction(activity: .loafing, expression: .slowBlink)
+        case .secondaryClick:
+            return CatReaction(activity: .sitting, expression: .sideEye)
         case .gentlePet:
             return CatReaction(activity: .kneading, expression: .slowBlink)
         case .hurriedAttention:

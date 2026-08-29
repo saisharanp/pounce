@@ -66,6 +66,7 @@ public struct SettingsView: View {
                 }
                 Toggle("Click through", isOn: clickThroughBinding)
                 Toggle("Hide in fullscreen", isOn: hideInFullscreenBinding)
+                Toggle("Roam freely when idle", isOn: roamingBinding)
             }
 
             Section("Play") {
@@ -105,6 +106,20 @@ public struct SettingsView: View {
                 }
                 Toggle("Reduced motion", isOn: reducedMotionBinding)
                 Toggle("High contrast", isOn: highContrastBinding)
+            }
+
+            Section("Screen Time") {
+                Toggle("Track Pounce sessions locally", isOn: screenTimeEnabledBinding)
+                LabeledContent("Focus session") {
+                    Stepper("\(viewModel.state.focusSessionMinutes) min", value: focusMinutesBinding, in: 1...120)
+                }
+                LabeledContent("Break reminder") {
+                    Stepper("\(viewModel.state.breakIntervalMinutes) min", value: breakMinutesBinding, in: 1...240)
+                }
+                Button("Clear local history", role: .destructive, action: controller.clearScreenTimeHistory)
+                Text("Only Pounce sessions are tracked on this Mac. No keystrokes, screen contents, or other apps are inspected.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Section("Keyboard Shortcuts") {
@@ -166,6 +181,26 @@ public struct SettingsView: View {
 
     private var highContrastBinding: Binding<Bool> {
         Binding(get: { viewModel.state.highContrast }, set: { controller.setHighContrast($0) })
+    }
+
+    private var roamingBinding: Binding<Bool> {
+        Binding(get: { viewModel.state.roamingEnabled }, set: { controller.setRoamingEnabled($0) })
+    }
+
+    private var screenTimeEnabledBinding: Binding<Bool> {
+        Binding(get: { viewModel.state.screenTimeEnabled }, set: { controller.setScreenTimeEnabled($0) })
+    }
+
+    private var focusMinutesBinding: Binding<Int> {
+        Binding(get: { viewModel.state.focusSessionMinutes }, set: { newValue in
+            viewModel.updateState { $0.focusSessionMinutes = PetState.clampedMinutes(newValue, defaultValue: 25) }
+        })
+    }
+
+    private var breakMinutesBinding: Binding<Int> {
+        Binding(get: { viewModel.state.breakIntervalMinutes }, set: { newValue in
+            viewModel.updateState { $0.breakIntervalMinutes = PetState.clampedMinutes(newValue, defaultValue: 45) }
+        })
     }
 }
 

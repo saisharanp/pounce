@@ -10,6 +10,7 @@ public final class AppCoordinator: ObservableObject {
     public let workspaceObserver: WorkspaceObserver
     public let soundController: CatSoundController
     public private(set) var windowController: PounceWindowController?
+    public private(set) var motionCoordinator: PounceMotionCoordinator?
     @Published public private(set) var requestedVisibility = true
     public private(set) var idleScheduleRevision = 0
     public private(set) var hasStarted = false
@@ -34,6 +35,9 @@ public final class AppCoordinator: ObservableObject {
             onSetPaused: { [weak self] _ in
                 self?.updateIdleWork()
             },
+            onMoveWindow: { [weak self] delta in
+                self?.windowController?.moveWindow(by: delta)
+            },
             onSetAttentionLevel: { [weak self] _ in
                 self?.updateIdleWork()
             },
@@ -46,7 +50,8 @@ public final class AppCoordinator: ObservableObject {
                     to: nil,
                     from: nil
                 )
-            }
+            },
+            reminderScheduler: SystemScreenTimeReminderScheduler()
         )
     }()
 
@@ -69,6 +74,7 @@ public final class AppCoordinator: ObservableObject {
     deinit {
         MainActor.assumeIsolated {
             idleTask?.cancel()
+            motionCoordinator?.stop()
             soundController.stop()
             if let activationObserver {
                 NotificationCenter.default.removeObserver(activationObserver)
@@ -92,6 +98,24 @@ public final class AppCoordinator: ObservableObject {
             menuController: menuController
         )
         self.windowController = windowController
+        let motionCoordinator = PounceMotionCoordinator(
+            eligibility: { [weak self, weak windowController] in
+                guard let self, let windowController else { return false }
+                return viewModel.state.roamingEnabled
+                    && !viewModel.state.reducedMotion
+                    && Self.shouldScheduleIdle(
+                        isVisible: windowController.isVisible,
+                        isPaused: viewModel.state.isPaused,
+                        isFullscreenActive: windowController.isFullscreenActive
+                    )
+            },
+            visibleFrameProvider: { [weak windowController] in
+                guard let window = windowController?.window else { return NSScreen.main?.visibleFrame }
+                return window.screen?.visibleFrame ?? NSScreen.main?.visibleFrame
+            }
+        )
+        self.motionCoordinator = motionCoordinator
+        motionCoordinator.start(windowController: windowController)
         windowController.onVisibilityChanged = { [weak self] _ in
             self?.updateIdleWork()
         }

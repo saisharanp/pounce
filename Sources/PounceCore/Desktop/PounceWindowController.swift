@@ -59,7 +59,8 @@ public final class PounceWindowController: NSWindowController {
                 viewModel: resolvedViewModel,
                 controller: resolvedMenuController
             ),
-            viewModel: resolvedViewModel
+            viewModel: resolvedViewModel,
+            controller: resolvedMenuController
         )
 
         self.workspaceObserver = workspaceObserver
@@ -147,6 +148,26 @@ public final class PounceWindowController: NSWindowController {
                 visibleFrame: visibleFrame
             )
         )
+    }
+
+    public func moveWindow(by delta: CGSize) {
+        guard let window else { return }
+        window.setFrameOrigin(
+            Self.clampedOrigin(
+                CGPoint(x: window.frame.minX + delta.width, y: window.frame.minY - delta.height),
+                windowSize: window.frame.size,
+                visibleFrame: window.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? window.frame
+            )
+        )
+        persistWindowOrigin()
+    }
+
+    public func moveToPoint(_ point: CGPoint, visibleFrame: CGRect) {
+        guard let window else { return }
+        window.setFrameOrigin(
+            Self.clampedOrigin(point, windowSize: window.frame.size, visibleFrame: visibleFrame)
+        )
+        persistWindowOrigin()
     }
 
     public static func clampedOrigin(
@@ -274,9 +295,11 @@ public final class PounceWindowController: NSWindowController {
 @MainActor
 private final class CatHostingView: NSHostingView<CatView> {
     private let viewModel: CatViewModel
+    private let controller: MenuBarController
 
-    init(rootView: CatView, viewModel: CatViewModel) {
+    init(rootView: CatView, viewModel: CatViewModel, controller: MenuBarController) {
         self.viewModel = viewModel
+        self.controller = controller
         super.init(rootView: rootView)
     }
 
@@ -302,5 +325,14 @@ private final class CatHostingView: NSHostingView<CatView> {
             return nil
         }
         return super.hitTest(point)
+    }
+
+    override func scrollWheel(with event: NSEvent) {
+        controller.handle(event.scrollingDeltaY >= 0 ? .scrollUp : .scrollDown)
+    }
+
+    override func rightMouseDown(with event: NSEvent) {
+        controller.handle(.secondaryClick)
+        super.rightMouseDown(with: event)
     }
 }

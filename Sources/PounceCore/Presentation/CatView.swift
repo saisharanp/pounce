@@ -325,6 +325,7 @@ public struct CatView: View {
     @State private var phase = false
     @State private var dragStartedAt: Date?
     @State private var recentContacts: [Date] = []
+    @State private var lastTranslation: CGSize = .zero
 
     public init(viewModel: CatViewModel, controller: MenuBarController) {
         self.viewModel = viewModel
@@ -345,6 +346,9 @@ public struct CatView: View {
             .frame(width: 132, height: 132)
             .contentShape(CatHitAreaShape())
             .gesture(catGesture)
+            .simultaneousGesture(
+                TapGesture(count: 2).onEnded { controller.handle(.doubleClick) }
+            )
             .scaleEffect(catScale)
 
             ToyOverlayView(
@@ -383,10 +387,18 @@ public struct CatView: View {
 
     private var catGesture: some Gesture {
         DragGesture(minimumDistance: 0, coordinateSpace: .local)
-            .onChanged { _ in
+            .onChanged { value in
                 if dragStartedAt == nil {
                     dragStartedAt = Date()
                 }
+                let delta = CGSize(
+                    width: value.translation.width - lastTranslation.width,
+                    height: value.translation.height - lastTranslation.height
+                )
+                if delta != .zero {
+                    controller.moveWindow(by: delta)
+                }
+                lastTranslation = value.translation
             }
             .onEnded { value in
                 let completedAt = Date()
@@ -401,6 +413,7 @@ public struct CatView: View {
                     recentContactCount: recentContacts.count
                 )
                 dragStartedAt = nil
+                lastTranslation = .zero
                 controller.handle(interaction)
             }
     }
