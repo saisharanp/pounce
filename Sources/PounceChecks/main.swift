@@ -1,7 +1,7 @@
 import AppKit
 import Darwin
 import CoreGraphics
-import DesktopCatCore
+import PounceCore
 import Foundation
 import SwiftUI
 
@@ -173,7 +173,7 @@ private let checks = [
         }
     },
     CheckCase(name: "secondClickReachesMeowThroughViewModel") {
-        let defaults = UserDefaults(suiteName: "DesktopCatChecks-\(UUID().uuidString)")!
+        let defaults = UserDefaults(suiteName: "PounceChecks-\(UUID().uuidString)")!
         let model = CatViewModel(store: PetStateStore(defaults: defaults))
 
         model.handle(.click)
@@ -187,7 +187,7 @@ private let checks = [
         }
     },
     CheckCase(name: "thirdClickReachesStartledThroughViewModel") {
-        let defaults = UserDefaults(suiteName: "DesktopCatChecks-\(UUID().uuidString)")!
+        let defaults = UserDefaults(suiteName: "PounceChecks-\(UUID().uuidString)")!
         let model = CatViewModel(store: PetStateStore(defaults: defaults))
 
         model.handle(.click)
@@ -199,7 +199,7 @@ private let checks = [
         }
     },
     CheckCase(name: "repeatedIdenticalInteractionsAdvanceReactionNonce") {
-        let defaults = UserDefaults(suiteName: "DesktopCatChecks-\(UUID().uuidString)")!
+        let defaults = UserDefaults(suiteName: "PounceChecks-\(UUID().uuidString)")!
         let model = CatViewModel(store: PetStateStore(defaults: defaults))
         let initialNonce = model.reactionNonce
 
@@ -215,7 +215,7 @@ private let checks = [
         }
     },
     CheckCase(name: "interactionPreemptsIdleActivity") {
-        let defaults = UserDefaults(suiteName: "DesktopCatChecks-\(UUID().uuidString)")!
+        let defaults = UserDefaults(suiteName: "PounceChecks-\(UUID().uuidString)")!
         let model = CatViewModel(
             store: PetStateStore(defaults: defaults),
             scheduler: CatScheduler(randomIndex: { _ in 0 })
@@ -232,7 +232,7 @@ private let checks = [
         }
     },
     CheckCase(name: "pausedModelDoesNotScheduleNewIdleActivity") {
-        let defaults = UserDefaults(suiteName: "DesktopCatChecks-\(UUID().uuidString)")!
+        let defaults = UserDefaults(suiteName: "PounceChecks-\(UUID().uuidString)")!
         let model = CatViewModel(
             store: PetStateStore(defaults: defaults),
             scheduler: CatScheduler(randomIndex: { _ in 0 })
@@ -277,7 +277,7 @@ private let checks = [
         }
     },
     CheckCase(name: "coordinatorDirectReactionReplacesPendingIdleSchedule") {
-        let defaults = UserDefaults(suiteName: "DesktopCatChecks-\(UUID().uuidString)")!
+        let defaults = UserDefaults(suiteName: "PounceChecks-\(UUID().uuidString)")!
         let screen = CGRect(x: 0, y: 0, width: 1_440, height: 900)
         let workspaceObserver = WorkspaceObserver(
             windowDataProvider: { [] },
@@ -316,7 +316,7 @@ private let checks = [
         }
     },
     CheckCase(name: "launchRestorationAppliesPersistedElapsedCare") {
-        let defaults = UserDefaults(suiteName: "DesktopCatChecks-\(UUID().uuidString)")!
+        let defaults = UserDefaults(suiteName: "PounceChecks-\(UUID().uuidString)")!
         let store = PetStateStore(defaults: defaults)
         let firstLaunch = Date(timeIntervalSince1970: 1_000_000)
         let relaunch = firstLaunch.addingTimeInterval(24 * 60 * 60)
@@ -345,7 +345,7 @@ private let checks = [
         }
     },
     CheckCase(name: "selectedToyIsTransientAndCompletesEveryInteraction") {
-        let defaults = UserDefaults(suiteName: "DesktopCatChecks-\(UUID().uuidString)")!
+        let defaults = UserDefaults(suiteName: "PounceChecks-\(UUID().uuidString)")!
         let store = PetStateStore(defaults: defaults)
         let model = CatViewModel(store: store)
         let expectedReactions: [(CatToy, CatActivity, CatExpression)] = [
@@ -374,7 +374,7 @@ private let checks = [
         }
     },
     CheckCase(name: "treatActionSelectsEatingReaction") {
-        let defaults = UserDefaults(suiteName: "DesktopCatChecks-\(UUID().uuidString)")!
+        let defaults = UserDefaults(suiteName: "PounceChecks-\(UUID().uuidString)")!
         let model = CatViewModel(store: PetStateStore(defaults: defaults))
 
         model.handle(.treat)
@@ -429,7 +429,7 @@ private let checks = [
         }
     },
     CheckCase(name: "menuControllerRoutesActionsAndPersistsSettings") {
-        let defaults = UserDefaults(suiteName: "DesktopCatChecks-\(UUID().uuidString)")!
+        let defaults = UserDefaults(suiteName: "PounceChecks-\(UUID().uuidString)")!
         let store = PetStateStore(defaults: defaults)
         let model = CatViewModel(store: store)
         var visibilityChanges: [Bool] = []
@@ -478,7 +478,7 @@ private let checks = [
         }
     },
     CheckCase(name: "keyboardActionsAreCompleteAndDiscoverable") {
-        let shortcuts = DesktopCatKeyboardAction.allCases.map {
+        let shortcuts = PounceKeyboardAction.allCases.map {
             ($0.title, $0.key, $0.modifierDescription)
         }
         let expected = [
@@ -499,13 +499,13 @@ private let checks = [
         }
     },
     CheckCase(name: "systemHotKeysMatchDiscoverableShortcuts") {
-        let hotKeys = DesktopCatSystemHotKey.allCases.map {
+        let hotKeys = PounceSystemHotKey.allCases.map {
             ($0.action, $0.keyCode, $0.modifiers)
         }
-        let expected: [(DesktopCatKeyboardAction, UInt32, UInt32)] = [
-            (.summonOrHide, 8, DesktopCatSystemHotKey.commandShiftModifiers),
-            (.pauseOrResume, 35, DesktopCatSystemHotKey.commandShiftModifiers),
-            (.muteOrUnmute, 46, DesktopCatSystemHotKey.commandShiftModifiers)
+        let expected: [(PounceKeyboardAction, UInt32, UInt32)] = [
+            (.summonOrHide, 8, PounceSystemHotKey.commandShiftModifiers),
+            (.pauseOrResume, 35, PounceSystemHotKey.commandShiftModifiers),
+            (.muteOrUnmute, 46, PounceSystemHotKey.commandShiftModifiers)
         ]
 
         guard hotKeys.count == expected.count else {
@@ -544,7 +544,7 @@ private let checks = [
         }
     },
     CheckCase(name: "catViewRendersTransientToyOverlay") {
-        let defaults = UserDefaults(suiteName: "DesktopCatChecks-\(UUID().uuidString)")!
+        let defaults = UserDefaults(suiteName: "PounceChecks-\(UUID().uuidString)")!
         let model = CatViewModel(store: PetStateStore(defaults: defaults))
         let controller = MenuBarController(viewModel: model)
         let plainRenderer = ImageRenderer(
@@ -568,7 +568,7 @@ private let checks = [
         }
     },
     CheckCase(name: "menuAndSettingsSurfacesRenderNatively") {
-        let defaults = UserDefaults(suiteName: "DesktopCatChecks-\(UUID().uuidString)")!
+        let defaults = UserDefaults(suiteName: "PounceChecks-\(UUID().uuidString)")!
         let controls = MenuBarController(
             viewModel: CatViewModel(store: PetStateStore(defaults: defaults))
         )
@@ -605,7 +605,7 @@ private let checks = [
         }
     },
     CheckCase(name: "viewModelRetainsTwoRecentIdleActivities") {
-        let defaults = UserDefaults(suiteName: "DesktopCatChecks-\(UUID().uuidString)")!
+        let defaults = UserDefaults(suiteName: "PounceChecks-\(UUID().uuidString)")!
         let model = CatViewModel(
             store: PetStateStore(defaults: defaults),
             scheduler: CatScheduler(randomIndex: { _ in 0 })
@@ -623,7 +623,7 @@ private let checks = [
         }
     },
     CheckCase(name: "viewModelPersistsStateChanges") {
-        let defaults = UserDefaults(suiteName: "DesktopCatChecks-\(UUID().uuidString)")!
+        let defaults = UserDefaults(suiteName: "PounceChecks-\(UUID().uuidString)")!
         let store = PetStateStore(defaults: defaults)
         let model = CatViewModel(store: store)
 
@@ -642,7 +642,7 @@ private let checks = [
         }
     },
     CheckCase(name: "viewModelUsesInjectedInitialRenderingState") {
-        let defaults = UserDefaults(suiteName: "DesktopCatChecks-\(UUID().uuidString)")!
+        let defaults = UserDefaults(suiteName: "PounceChecks-\(UUID().uuidString)")!
         let expected = PetState(reducedMotion: true, highContrast: true, catScale: 1.25)
         let model = CatViewModel(
             store: PetStateStore(defaults: defaults),
@@ -884,7 +884,7 @@ private let checks = [
         }
     },
     CheckCase(name: "storeRoundTripsPreferences") {
-        let defaults = UserDefaults(suiteName: "DesktopCatChecks-\(UUID().uuidString)")!
+        let defaults = UserDefaults(suiteName: "PounceChecks-\(UUID().uuidString)")!
         let store = PetStateStore(defaults: defaults)
         let expected = PetState(
             personality: .curiousExplorer,
@@ -899,7 +899,7 @@ private let checks = [
         }
     },
     CheckCase(name: "storeRoundTripsCompletePetState") {
-        let defaults = UserDefaults(suiteName: "DesktopCatChecks-\(UUID().uuidString)")!
+        let defaults = UserDefaults(suiteName: "PounceChecks-\(UUID().uuidString)")!
         let store = PetStateStore(defaults: defaults)
         let expected = PetState(
             personality: .dignifiedSenior,
@@ -937,7 +937,7 @@ private let checks = [
         }
     },
     CheckCase(name: "taskSevenPreferencesRoundTripAndClampVolume") {
-        let defaults = UserDefaults(suiteName: "DesktopCatChecks-\(UUID().uuidString)")!
+        let defaults = UserDefaults(suiteName: "PounceChecks-\(UUID().uuidString)")!
         let store = PetStateStore(defaults: defaults)
         let expected = PetState(
             soundVolume: 1.4,
@@ -956,7 +956,7 @@ private let checks = [
         }
     },
     CheckCase(name: "legacyStateUsesSafeTaskSevenDefaults") {
-        let defaults = UserDefaults(suiteName: "DesktopCatChecks-\(UUID().uuidString)")!
+        let defaults = UserDefaults(suiteName: "PounceChecks-\(UUID().uuidString)")!
         defaults.set(
             Data(#"{"personality":"sleepyLoaf","soundVolume":-3,"attentionLevel":"unknown"}"#.utf8),
             forKey: "pet-state"
@@ -973,7 +973,7 @@ private let checks = [
         }
     },
     CheckCase(name: "absentStoredDataReturnsSafeDefaults") {
-        let defaults = UserDefaults(suiteName: "DesktopCatChecks-\(UUID().uuidString)")!
+        let defaults = UserDefaults(suiteName: "PounceChecks-\(UUID().uuidString)")!
         let store = PetStateStore(defaults: defaults)
 
         guard store.load() == PetState() else {
@@ -981,7 +981,7 @@ private let checks = [
         }
     },
     CheckCase(name: "corruptStoredDataReturnsSafeDefaults") {
-        let defaults = UserDefaults(suiteName: "DesktopCatChecks-\(UUID().uuidString)")!
+        let defaults = UserDefaults(suiteName: "PounceChecks-\(UUID().uuidString)")!
         defaults.set(Data([0x00, 0xFF, 0x7F]), forKey: "pet-state")
         let store = PetStateStore(defaults: defaults)
 
@@ -990,7 +990,7 @@ private let checks = [
         }
     },
     CheckCase(name: "partialStoredDataUsesSafeDefaults") {
-        let defaults = UserDefaults(suiteName: "DesktopCatChecks-\(UUID().uuidString)")!
+        let defaults = UserDefaults(suiteName: "PounceChecks-\(UUID().uuidString)")!
         defaults.set(Data(#"{"personality":"sleepyLoaf"}"#.utf8), forKey: "pet-state")
         let store = PetStateStore(defaults: defaults)
         var expected = PetState()
@@ -1001,7 +1001,7 @@ private let checks = [
         }
     },
     CheckCase(name: "encodingFailurePreservesLastValidState") {
-        let defaults = UserDefaults(suiteName: "DesktopCatChecks-\(UUID().uuidString)")!
+        let defaults = UserDefaults(suiteName: "PounceChecks-\(UUID().uuidString)")!
         let store = PetStateStore(defaults: defaults)
         let valid = PetState(personality: .sleepyLoaf, catScale: 0.9)
         var invalid = valid
@@ -1016,7 +1016,7 @@ private let checks = [
     },
     CheckCase(name: "positionIsClampedInsideVisibleFrame") {
         let frame = CGRect(x: 0, y: 0, width: 1_000, height: 700)
-        let result = DesktopCatWindowController.clampedOrigin(
+        let result = PounceWindowController.clampedOrigin(
             CGPoint(x: 1_200, y: -50),
             windowSize: CGSize(width: 180, height: 180),
             visibleFrame: frame
@@ -1028,7 +1028,7 @@ private let checks = [
     },
     CheckCase(name: "oversizedWindowIsAnchoredToVisibleFrameOrigin") {
         let frame = CGRect(x: 40, y: 30, width: 100, height: 80)
-        let result = DesktopCatWindowController.clampedOrigin(
+        let result = PounceWindowController.clampedOrigin(
             CGPoint(x: 70, y: 50),
             windowSize: CGSize(width: 180, height: 180),
             visibleFrame: frame
@@ -1039,15 +1039,15 @@ private let checks = [
         }
     },
     CheckCase(name: "savedPlacementRestoresOnMatchingConnectedDisplay") {
-        let primary = DesktopCatDisplay(
+        let primary = PounceDisplay(
             identifier: "primary",
             visibleFrame: CGRect(x: 0, y: 0, width: 1_440, height: 900)
         )
-        let secondary = DesktopCatDisplay(
+        let secondary = PounceDisplay(
             identifier: "secondary",
             visibleFrame: CGRect(x: -1_280, y: 0, width: 1_280, height: 1_024)
         )
-        let origin = DesktopCatWindowController.restoredOrigin(
+        let origin = PounceWindowController.restoredOrigin(
             relativeOrigin: ScreenRelativePoint(x: 0.5, y: 0.25),
             windowSize: CGSize(width: 180, height: 180),
             savedDisplayIdentifier: "secondary",
@@ -1060,15 +1060,15 @@ private let checks = [
         }
     },
     CheckCase(name: "missingSavedDisplayFallsBackToPrimaryPlacement") {
-        let primary = DesktopCatDisplay(
+        let primary = PounceDisplay(
             identifier: "primary",
             visibleFrame: CGRect(x: 0, y: 0, width: 1_440, height: 900)
         )
-        let secondary = DesktopCatDisplay(
+        let secondary = PounceDisplay(
             identifier: "secondary",
             visibleFrame: CGRect(x: -1_280, y: 0, width: 1_280, height: 1_024)
         )
-        let origin = DesktopCatWindowController.restoredOrigin(
+        let origin = PounceWindowController.restoredOrigin(
             relativeOrigin: ScreenRelativePoint(x: 0.5, y: 0.25),
             windowSize: CGSize(width: 180, height: 180),
             savedDisplayIdentifier: "disconnected",
@@ -1081,21 +1081,21 @@ private let checks = [
         }
     },
     CheckCase(name: "fullscreenHidingPreferenceControlsVisibilityPolicy") {
-        guard !DesktopCatWindowController.shouldShow(
+        guard !PounceWindowController.shouldShow(
             requestedVisibility: true,
             isFullscreenActive: true,
             hideInFullscreen: true
         ) else {
             throw CheckFailure(description: "fullscreen hiding did not suppress a requested cat window")
         }
-        guard DesktopCatWindowController.shouldShow(
+        guard PounceWindowController.shouldShow(
             requestedVisibility: true,
             isFullscreenActive: true,
             hideInFullscreen: false
         ) else {
             throw CheckFailure(description: "disabling fullscreen hiding did not reveal the requested cat window")
         }
-        guard !DesktopCatWindowController.shouldShow(
+        guard !PounceWindowController.shouldShow(
             requestedVisibility: false,
             isFullscreenActive: false,
             hideInFullscreen: false
@@ -1222,7 +1222,7 @@ private let checks = [
 private func selectedChecks(arguments: [String]) throws -> [CheckCase] {
     guard !arguments.isEmpty else { return checks }
     guard arguments.count == 2, arguments[0] == "--filter" else {
-        throw CheckFailure(description: "usage: DesktopCatChecks [--filter <substring>]")
+        throw CheckFailure(description: "usage: PounceChecks [--filter <substring>]")
     }
 
     let filter = arguments[1]

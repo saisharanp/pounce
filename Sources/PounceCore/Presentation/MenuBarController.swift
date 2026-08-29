@@ -3,7 +3,7 @@ import Combine
 import Foundation
 import SwiftUI
 
-public enum DesktopCatKeyboardAction: String, CaseIterable, Sendable {
+public enum PounceKeyboardAction: String, CaseIterable, Sendable {
     case summonOrHide
     case pauseOrResume
     case muteOrUnmute
@@ -166,7 +166,7 @@ public final class MenuBarController: ObservableObject {
         onOpenSettings()
     }
 
-    public func connect(windowController: DesktopCatWindowController) {
+    public func connect(windowController: PounceWindowController) {
         onSetVisibility = { [weak windowController] in windowController?.setVisible($0) }
         onSetClickThrough = { [weak windowController] in windowController?.setClickThrough($0) }
         onSetWindowLevel = { [weak windowController] in windowController?.setWindowLevel($0) }
@@ -205,7 +205,7 @@ public struct MenuBarContent: View {
     public var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Label("Desktop Cat", systemImage: "cat.fill")
+                Label("Pounce", systemImage: "cat.fill")
                     .font(.headline)
                 Spacer()
                 Text(viewModel.state.isPaused ? "Paused" : viewModel.activity.displayName)

@@ -5,17 +5,17 @@ tabby overlay that keeps its preferences on this Mac.
 
 ## Build and run
 
-Open `Package.swift` in Xcode and run the `DesktopCat` scheme, or use SwiftPM:
+Open `Package.swift` in Xcode and run the `Pounce` scheme, or use SwiftPM:
 
 ```sh
-swift run DesktopCat
+swift run Pounce
 ```
 
 To create an ad-hoc-signed app bundle:
 
 ```sh
 ./Scripts/build-app.sh
-open dist/DesktopCat.app
+open dist/Pounce.app
 ```
 
 ## Controls
@@ -34,13 +34,13 @@ The project intentionally uses a dependency-free checks executable, not XCTest
 or Swift Testing:
 
 ```sh
-swift run DesktopCatChecks
-swift run DesktopCatChecks --filter pausedModelDoesNotScheduleNewIdleActivity
+swift run PounceChecks
+swift run PounceChecks --filter pausedModelDoesNotScheduleNewIdleActivity
 ```
 
 ## Privacy and limitations
 
-All preferences stay in local `UserDefaults`. Desktop Cat has no network,
+All preferences stay in local `UserDefaults`. Pounce has no network,
 analytics, accounts, cloud sync, microphone access, Accessibility permission,
 or global input capture. It conservatively hides during fullscreen uncertainty
 and pauses idle work when hidden, paused, or fullscreen. Fullscreen detection,

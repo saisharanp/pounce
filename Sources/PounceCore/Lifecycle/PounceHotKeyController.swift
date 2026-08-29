@@ -4,14 +4,14 @@ import Foundation
 /// The three documented commands registered as system hot keys. Registration
 /// uses Carbon's hot-key service, not an event tap, so it needs neither input
 /// monitoring nor Accessibility permission.
-public enum DesktopCatSystemHotKey: CaseIterable {
+public enum PounceSystemHotKey: CaseIterable {
     case summonOrHide
     case pauseOrResume
     case muteOrUnmute
 
     public static let commandShiftModifiers = UInt32(cmdKey | shiftKey)
 
-    public var action: DesktopCatKeyboardAction {
+    public var action: PounceKeyboardAction {
         switch self {
         case .summonOrHide: .summonOrHide
         case .pauseOrResume: .pauseOrResume
@@ -39,7 +39,7 @@ public enum DesktopCatSystemHotKey: CaseIterable {
 }
 
 @MainActor
-final class DesktopCatHotKeyController {
+final class PounceHotKeyController {
     private static let signature = OSType(0x4443_4154) // "DCAT"
 
     private let menuController: MenuBarController
@@ -75,11 +75,11 @@ final class DesktopCatHotKeyController {
         )
         guard status == noErr else { return }
 
-        for hotKey in DesktopCatSystemHotKey.allCases {
+        for hotKey in PounceSystemHotKey.allCases {
             var registeredHotKey: EventHotKeyRef?
             let registrationStatus = RegisterEventHotKey(
                 hotKey.keyCode,
-                DesktopCatSystemHotKey.commandShiftModifiers,
+                PounceSystemHotKey.commandShiftModifiers,
                 EventHotKeyID(signature: Self.signature, id: hotKey.identifier),
                 GetApplicationEventTarget(),
                 0,
@@ -92,7 +92,7 @@ final class DesktopCatHotKeyController {
     }
 
     private func performAction(identifier: UInt32) {
-        guard let hotKey = DesktopCatSystemHotKey.allCases.first(where: { $0.identifier == identifier }) else {
+        guard let hotKey = PounceSystemHotKey.allCases.first(where: { $0.identifier == identifier }) else {
             return
         }
         switch hotKey {
@@ -119,7 +119,7 @@ final class DesktopCatHotKeyController {
         )
         guard status == noErr else { return status }
 
-        let controller = Unmanaged<DesktopCatHotKeyController>
+        let controller = Unmanaged<PounceHotKeyController>
             .fromOpaque(userData)
             .takeUnretainedValue()
         Task { @MainActor [weak controller] in

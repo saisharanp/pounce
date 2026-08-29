@@ -108,7 +108,7 @@ public struct SettingsView: View {
             }
 
             Section("Keyboard Shortcuts") {
-                ForEach(DesktopCatKeyboardAction.allCases, id: \.self) { action in
+                ForEach(PounceKeyboardAction.allCases, id: \.self) { action in
                     LabeledContent(action.title) {
                         Text("⇧⌘\(action.key)")
                             .font(.system(.body, design: .monospaced))

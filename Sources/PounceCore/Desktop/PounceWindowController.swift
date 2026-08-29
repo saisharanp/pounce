@@ -4,7 +4,7 @@ import SwiftUI
 /// A connected display used to resolve the persisted normalized window origin.
 /// Its identifier is AppKit's stable display number, stored as a string so the
 /// domain model remains AppKit-free and backward compatible.
-public struct DesktopCatDisplay: Equatable {
+public struct PounceDisplay: Equatable {
     public let identifier: String
     public let visibleFrame: CGRect
 
@@ -17,7 +17,7 @@ public struct DesktopCatDisplay: Equatable {
 /// Owns the companion's transparent, non-activating desktop panel. Task 6
 /// replaces its empty SwiftUI host with the cat renderer.
 @MainActor
-public final class DesktopCatWindowController: NSWindowController {
+public final class PounceWindowController: NSWindowController {
     private let workspaceObserver: WorkspaceObserver
     private var screenParametersObserver: NSObjectProtocol?
     private var windowMoveObserver: NSObjectProtocol?
@@ -100,7 +100,7 @@ public final class DesktopCatWindowController: NSWindowController {
     }
 
     required init?(coder: NSCoder) {
-        fatalError("DesktopCatWindowController does not support coder initialization")
+        fatalError("PounceWindowController does not support coder initialization")
     }
 
     deinit {
@@ -174,7 +174,7 @@ public final class DesktopCatWindowController: NSWindowController {
         relativeOrigin: ScreenRelativePoint,
         windowSize: CGSize,
         savedDisplayIdentifier: String?,
-        displays: [DesktopCatDisplay],
+        displays: [PounceDisplay],
         primaryDisplayIdentifier: String?
     ) -> CGPoint? {
         guard let primaryDisplay = displays.first(where: { $0.identifier == primaryDisplayIdentifier })
@@ -203,9 +203,9 @@ public final class DesktopCatWindowController: NSWindowController {
         displayIdentifier: String?
     ) {
         guard let window else { return }
-        let displays = NSScreen.screens.compactMap { screen -> DesktopCatDisplay? in
+        let displays = NSScreen.screens.compactMap { screen -> PounceDisplay? in
             guard let identifier = Self.displayIdentifier(for: screen) else { return nil }
-            return DesktopCatDisplay(identifier: identifier, visibleFrame: screen.visibleFrame)
+            return PounceDisplay(identifier: identifier, visibleFrame: screen.visibleFrame)
         }
         let primaryIdentifier = NSScreen.main.flatMap(Self.displayIdentifier(for:))
         guard let origin = Self.restoredOrigin(

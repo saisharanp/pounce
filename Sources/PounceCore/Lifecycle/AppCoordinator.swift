@@ -9,7 +9,7 @@ public final class AppCoordinator: ObservableObject {
     public let viewModel: CatViewModel
     public let workspaceObserver: WorkspaceObserver
     public let soundController: CatSoundController
-    public private(set) var windowController: DesktopCatWindowController?
+    public private(set) var windowController: PounceWindowController?
     @Published public private(set) var requestedVisibility = true
     public private(set) var idleScheduleRevision = 0
     public private(set) var hasStarted = false
@@ -53,7 +53,7 @@ public final class AppCoordinator: ObservableObject {
     private var idleTask: Task<Void, Never>?
     private var activationObserver: NSObjectProtocol?
     private var screenParametersObserver: NSObjectProtocol?
-    private var hotKeyController: DesktopCatHotKeyController?
+    private var hotKeyController: PounceHotKeyController?
 
     public init(
         store: PetStateStore = PetStateStore(),
@@ -85,7 +85,7 @@ public final class AppCoordinator: ObservableObject {
         hasStarted = true
         viewModel.restoreElapsedCare(now: Date())
 
-        let windowController = DesktopCatWindowController(
+        let windowController = PounceWindowController(
             state: viewModel.state,
             workspaceObserver: workspaceObserver,
             viewModel: viewModel,
@@ -104,7 +104,7 @@ public final class AppCoordinator: ObservableObject {
                 $0.windowDisplayIdentifier = displayIdentifier
             }
         }
-        hotKeyController = DesktopCatHotKeyController(menuController: menuController)
+        hotKeyController = PounceHotKeyController(menuController: menuController)
 
         activationObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.didBecomeActiveNotification,

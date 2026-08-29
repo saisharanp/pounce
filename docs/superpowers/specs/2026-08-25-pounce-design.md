@@ -1,4 +1,4 @@
-# Desktop Cat for macOS — Design
+# Pounce for macOS — Design
 
 ## Goal
 

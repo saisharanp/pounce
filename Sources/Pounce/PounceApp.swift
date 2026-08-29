@@ -1,9 +1,9 @@
 import AppKit
-import DesktopCatCore
+import PounceCore
 import SwiftUI
 
 @MainActor
-final class DesktopCatApplicationDelegate: NSObject, NSApplicationDelegate {
+final class PounceApplicationDelegate: NSObject, NSApplicationDelegate {
     let coordinator = AppCoordinator()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -13,11 +13,11 @@ final class DesktopCatApplicationDelegate: NSObject, NSApplicationDelegate {
 
 @main
 @MainActor
-struct DesktopCatApp: App {
-    @NSApplicationDelegateAdaptor(DesktopCatApplicationDelegate.self) private var applicationDelegate
+struct PounceApp: App {
+    @NSApplicationDelegateAdaptor(PounceApplicationDelegate.self) private var applicationDelegate
 
     var body: some Scene {
-        MenuBarExtra("Desktop Cat", systemImage: "cat.fill") {
+        MenuBarExtra("Pounce", systemImage: "cat.fill") {
             MenuBarContent(controller: applicationDelegate.coordinator.menuController)
         }
         .menuBarExtraStyle(.window)
