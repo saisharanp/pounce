@@ -413,6 +413,37 @@ private let checks = [
             throw CheckFailure(description: "one or more approved cat responses shared the same tone")
         }
     },
+    CheckCase(name: "catVoiceUsesMeowContourAndPurrPulseTrain") {
+        if ProcessInfo.processInfo.environment["POUNCE_DUMP_SOUNDS"] == "1" {
+            let directory = URL(fileURLWithPath: "/tmp/pounce-sounds")
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            for kind in CatSoundKind.allCases {
+                try CatSoundController.toneData(for: kind)
+                    .write(to: directory.appendingPathComponent("\(kind.rawValue).wav"))
+            }
+        }
+
+        let meow = try wavPCM(CatSoundController.toneData(for: .meow))
+        let purr = try wavPCM(CatSoundController.toneData(for: .purr))
+        let meowDuration = Double(meow.samples.count) / Double(meow.sampleRate)
+        let purrDuration = Double(purr.samples.count) / Double(purr.sampleRate)
+        guard meowDuration >= 0.45 else {
+            throw CheckFailure(description: "meow lasted \(meowDuration)s; a cat voice needs a full miaow")
+        }
+        guard purrDuration >= 0.7 else {
+            throw CheckFailure(description: "purr lasted \(purrDuration)s; a cat rumble has to settle in")
+        }
+
+        let thirds = zeroCrossingRatesByThird(meow.samples)
+        guard thirds[1] > thirds[0], thirds[1] > thirds[2] else {
+            throw CheckFailure(description: "meow pitch did not rise then fall like a cat miaow")
+        }
+
+        let pulses = pulseCount(purr.samples, sampleRate: purr.sampleRate)
+        guard pulses >= 12 else {
+            throw CheckFailure(description: "purr had \(pulses) pulses; cats rumble at ~25 Hz")
+        }
+    },
     CheckCase(name: "interactionsRouteEveryApprovedSoundResponse") {
         let mappings: [(CatInteraction, CatReaction, CatSoundKind)] = [
             (.gentlePet, CatReaction(activity: .kneading, expression: .slowBlink), .purr),
@@ -1413,6 +1444,77 @@ private let checks = [
         }
     }
 ]
+
+private func wavPCM(_ data: Data) throws -> (sampleRate: Int, samples: [Int16]) {
+    guard data.count > 44,
+          String(data: data.prefix(4), encoding: .ascii) == "RIFF" else {
+        throw CheckFailure(description: "procedural cat voice was not a WAV")
+    }
+    let sampleRate = Int(
+        UInt32(data[24])
+            | UInt32(data[25]) << 8
+            | UInt32(data[26]) << 16
+            | UInt32(data[27]) << 24
+    )
+    var samples: [Int16] = []
+    samples.reserveCapacity((data.count - 44) / 2)
+    var offset = 44
+    while offset + 1 < data.count {
+        let value = Int16(bitPattern: UInt16(data[offset]) | UInt16(data[offset + 1]) << 8)
+        samples.append(value)
+        offset += 2
+    }
+    return (sampleRate, samples)
+}
+
+private func zeroCrossingRatesByThird(_ samples: [Int16]) -> [Double] {
+    let third = max(1, samples.count / 3)
+    return (0..<3).map { index in
+        let start = index * third
+        let end = index == 2 ? samples.count : start + third
+        return zeroCrossingRate(samples[start..<end])
+    }
+}
+
+private func zeroCrossingRate(_ samples: ArraySlice<Int16>) -> Double {
+    guard samples.count > 1 else { return 0 }
+    var crossings = 0
+    var previous = samples[samples.startIndex]
+    for value in samples.dropFirst() {
+        if (previous < 0 && value >= 0) || (previous >= 0 && value < 0) {
+            crossings += 1
+        }
+        previous = value
+    }
+    return Double(crossings) / Double(samples.count - 1)
+}
+
+private func pulseCount(_ samples: [Int16], sampleRate: Int) -> Int {
+    let window = max(1, sampleRate / 80)
+    var energies: [Double] = []
+    var index = 0
+    while index < samples.count {
+        let end = min(index + window, samples.count)
+        var sum = 0.0
+        for sample in samples[index..<end] {
+            let x = Double(sample) / 32_768
+            sum += x * x
+        }
+        energies.append(sum / Double(end - index))
+        index += window
+    }
+    let threshold = (energies.max() ?? 0) * 0.35
+    guard energies.count >= 3 else { return 0 }
+    var count = 0
+    for i in 1..<(energies.count - 1) where
+        energies[i] > energies[i - 1]
+        && energies[i] >= energies[i + 1]
+        && energies[i] >= threshold
+    {
+        count += 1
+    }
+    return count
+}
 
 @MainActor
 private func selectedChecks(arguments: [String]) throws -> [CheckCase] {
